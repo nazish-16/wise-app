@@ -26,6 +26,7 @@ import { GoalsView } from "@/app/components/GoalsView";
 import { InsightsView } from "@/app/components/InsightsView";
 import { NotificationsView } from "@/app/components/NotificationsView";
 import { RecurringView } from "@/app/components/RecurringView";
+import { FinanceGPT } from "@/app/components/FinanceGPT";
 
 // Import types and utils
 import { SpendLog, SpendCategory, Notification, SavingsGoal, RecurringRule, Cadence } from "@/app/lib/types";
@@ -71,7 +72,7 @@ const SESSION_ID_KEY = "wise_session_id";
 
 // ---------- Helper Functions ----------
 
-function FinanceGPT({
+function FinanceGPTComponent({
   userData,
   derived,
   logs,
@@ -350,7 +351,7 @@ function FinanceGPT({
                 }`}
               >
                 {msg.role === "assistant" ? (
-                  <div className={`text-sm ${fg} space-y-2 whitespace-pre-wrap break-words`}>
+                  <div className={`text-sm ${fg} space-y-2 whitespace-pre-wrap wrap-break-word`}>
                     {msg.content.split("\n").map((line, idx) => {
                       if (line.startsWith("## ")) {
                         return (
@@ -394,7 +395,7 @@ function FinanceGPT({
                     })}
                   </div>
                 ) : (
-                  <p className={`text-sm ${fg} whitespace-pre-wrap break-words`}>{msg.content}</p>
+                  <p className={`text-sm ${fg} whitespace-pre-wrap wrap-break-word`}>{msg.content}</p>
                 )}
                 <p className={`text-xs ${muted} mt-2`}>{new Date(msg.timestamp).toLocaleTimeString()}</p>
               </div>
