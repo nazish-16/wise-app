@@ -130,7 +130,7 @@ function ContextToggles({
             </p>
           </div>
 
-          <div className="flex gap-1 flex-shrink-0">
+          <div className="flex gap-1 shrink-0">
             <button
               onClick={() => setIncludeLast30Days(!includeLast30Days)}
               className={`p-2 rounded-lg text-xs font-medium transition-colors ${
@@ -299,7 +299,7 @@ function ChatMessage({
         }`}
       >
         {isUser ? (
-          <p className="text-sm font-medium leading-relaxed whitespace-pre-wrap break-words">{message.content}</p>
+          <p className="text-sm font-medium leading-relaxed whitespace-pre-wrap wrap-break-words">{message.content}</p>
         ) : (
           <MarkdownContent content={message.content} fg={fg} />
         )}
@@ -856,13 +856,13 @@ export function FinanceGPT({
               whileTap={{ scale: 0.95 }}
               onClick={() => sendMessage()}
               disabled={isLoading || !inputValue.trim()}
-              className="p-2 rounded-lg bg-[rgb(var(--foreground))] text-[rgb(var(--background))] hover:opacity-90 disabled:opacity-50 transition-opacity font-semibold flex-shrink-0"
+              className="p-2 rounded-lg bg-[rgb(var(--foreground))] text-[rgb(var(--background))] hover:opacity-90 disabled:opacity-50 transition-opacity font-semibold shrink-0"
             >
               <MdSend size={18} />
             </motion.button>
 
             {/* Only export / reset remain here */}
-            <div className="flex gap-0.5 flex-shrink-0">
+            <div className="flex gap-0.5 shrink-0">
               <button
                 onClick={() => exportChat("markdown")}
                 className="p-1.5 rounded hover:bg-[rgb(var(--muted))] transition-colors text-[rgb(var(--muted-foreground))]"
