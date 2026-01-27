@@ -4,7 +4,6 @@
 import Image from "next/image";
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { SiDedge } from "react-icons/si";
 import { BiMenu } from "react-icons/bi";
 import { MdDashboard, MdTrendingUp, MdSettings, MdAssignment, MdStart, MdLightbulb, MdRepeat, MdNotifications, MdSend, MdRefresh, MdDownload } from "react-icons/md";
 import { AnimatePresence, motion } from "framer-motion";
@@ -268,7 +267,7 @@ function FinanceGPT({
       <div className="flex items-center justify-between">
         <div>
           <h2 className={`text-xl font-semibold ${fg}`}>FinanceGPT</h2>
-          <p className={`text-xs ${muted} mt-1`}>Powered by Google Gemini • Not financial advice</p>
+          <p className={`text-xs ${muted} mt-1`}>Just financial advice • Consult a professional for investment decisions</p>
         </div>
         <div className="flex gap-2">
           <button onClick={exportChat} className="p-2 rounded hover:bg-[rgb(var(--muted))]" title="Export chat">
@@ -433,7 +432,7 @@ function FinanceGPT({
               sendMessage();
             }
           }}
-          placeholder="Ask me anything about your finances... (Shift+Enter for new line)"
+          placeholder="Ask me anything about your finances."
           className={`${inputBase} flex-1 resize-none max-h-20 py-2`}
           rows={2}
         />
@@ -571,9 +570,6 @@ function HeaderLogo({ border }: { border: string }) {
         height={35}
         className="bg-[#4d4d4d7c] hover:bg-[#4d4d4d4b] rounded-md p-1"
       />
-      <div className={`leading-tight border ${border} rounded-full p-1 hover:bg-[#4d4d4d7c]`}>
-        <SiDedge size={17} />
-      </div>
     </div>
   );
 }
@@ -941,10 +937,10 @@ function DashboardView({
               {checkStatus === "idle"
                 ? "Enter amount"
                 : checkStatus === "safe"
-                ? "✅ Safe"
+                ? "Safe"
                 : checkStatus === "risky"
-                ? "⚠️ Risky"
-                : "❌ Not advised"}
+                ? "Risky"
+                : "Not advised"}
             </p>
           </motion.div>
         </div>

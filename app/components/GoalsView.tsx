@@ -93,7 +93,7 @@ export function GoalsView({
           <p className={`text-sm ${muted} mt-1`}>Track your progress towards financial targets.</p>
         </div>
         <button onClick={() => setModalOpen(true)} className={`${buttonPrimary} gap-2`}>
-          <MdAdd size={18} /> New Goal
+          <MdAdd size={18} /> Goal
         </button>
       </div>
 
