@@ -674,8 +674,16 @@ export function FinanceGPT({
 
       setChatMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to send");
-      setChatMessages((prev) => prev.slice(0, -1));
+      // toast.error(error instanceof Error ? error.message : "Failed to send");
+      // setChatMessages((prev) => prev.slice(0, -1));
+      
+      const errorMessage: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: "Please try again or Please ask again.",
+        timestamp: Date.now(),
+      };
+      setChatMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }
