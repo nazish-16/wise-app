@@ -642,6 +642,7 @@ function DashboardView({
   derived,
   userData,
   logs,
+  goals,
   checkAmount,
   setCheckAmount,
   checkNote,
@@ -1194,6 +1195,43 @@ function DashboardView({
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* Savings Goals Widget (Product/Goal related) */}
+      <div className={`rounded-xl border ${border} ${cardBg} p-4 md:p-5`}>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className={`text-sm font-semibold ${fg}`}>Active Goals</h3>
+            <p className={`text-xs ${muted} mt-1`}>Track your progress towards specific purchases or products.</p>
+          </div>
+        </div>
+
+        <div className="mt-4 space-y-3">
+          {(!goals || goals.length === 0) ? (
+            <div className={`rounded-lg border ${border} ${shellBg} p-4`}>
+              <p className={`text-sm ${muted}`}>No goals set. Add a goal to track savings for a product.</p>
+            </div>
+          ) : (
+            goals.slice(0, 3).map((g: any) => (
+              <div key={g.id} className={`rounded-lg border ${border} ${shellBg} p-3`}>
+                <div className="flex items-center justify-between gap-2">
+                  <p className={`text-sm font-medium ${fg}`}>{g.title}</p>
+                  <p className={`text-sm font-semibold ${fg}`}>
+                    ₹{formatINR(g.currentSaved)} <span className={`text-xs ${muted} font-normal`}>/ ₹{formatINR(g.targetAmount)}</span>
+                  </p>
+                </div>
+                <div className={`mt-2 h-2 rounded-full bg-[rgb(var(--muted))] overflow-hidden`}>
+                  <motion.div
+                    className={`h-full rounded-full bg-[rgb(var(--foreground))]/70`}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.round(clamp01(g.currentSaved / g.targetAmount) * 100)}%` }}
+                    transition={{ duration: 0.35, ease: "easeOut" }}
+                  />
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
@@ -1943,6 +1981,7 @@ export default function Home() {
                 derived={derived}
                 userData={userData}
                 logs={logs}
+                goals={goals}
                 checkAmount={checkAmount}
                 setCheckAmount={setCheckAmount}
                 checkNote={checkNote}
@@ -2051,6 +2090,7 @@ export default function Home() {
                 shellBg={shellBg}
                 fg={fg}
                 muted={muted}
+                onAddLog={addLog}
               />
             ) : currentView === "settings" ? (
               <Settings userData={userData} onUpdate={refreshData} />

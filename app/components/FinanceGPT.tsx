@@ -175,52 +175,75 @@ function ContextToggles({
 
 function MarkdownContent({ content, fg }: { content: string; fg: string }) {
   return (
-    <div className={`${fg} prose prose-invert max-w-none text-sm space-y-2`}>
+    <div className={`text-sm leading-relaxed ${fg} space-y-3`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkBreaks]}
         components={{
           h1: ({ ...props }) => (
-            <h1 className="text-lg font-bold mt-3 mb-2" {...props} />
+            <h1 className="text-base font-bold mt-4 mb-2 border-b border-[rgb(var(--border))] pb-1" {...props} />
           ),
           h2: ({ ...props }) => (
-            <h2 className="text-base font-bold mt-2 mb-1" {...props} />
+            <h2 className="text-sm font-bold mt-3 mb-1" {...props} />
           ),
           h3: ({ ...props }) => (
             <h3 className="text-sm font-semibold mt-2 mb-1" {...props} />
           ),
-          p: ({ ...props }) => <p className="leading-relaxed mb-2" {...props} />,
+          p: ({ ...props }) => <p className="mb-2 last:mb-0" {...props} />,
           ul: ({ ...props }) => (
-            <ul className="list-disc list-inside space-y-1 ml-2" {...props} />
+            <ul className="list-disc list-outside ml-4 space-y-1 mb-2" {...props} />
           ),
           ol: ({ ...props }) => (
-            <ol className="list-decimal list-inside space-y-1 ml-2" {...props} />
+            <ol className="list-decimal list-outside ml-4 space-y-1 mb-2" {...props} />
           ),
-          li: ({ ...props }) => <li className="ml-1" {...props} />,
+          li: ({ ...props }) => <li className="pl-1" {...props} />,
           blockquote: ({ ...props }) => (
             <blockquote
-              className="border-l-4 border-[rgb(var(--muted))] pl-3 italic text-[rgb(var(--muted-foreground))] my-2"
+              className="border-l-2 border-[rgb(var(--muted-foreground))] pl-3 py-1 italic text-[rgb(var(--muted-foreground))] bg-[rgb(var(--muted))]/30 rounded-r my-2"
               {...props}
             />
           ),
           code: ({ inline, ...props }: any) =>
             inline ? (
               <code
-                className="bg-[rgb(var(--muted))] px-1.5 py-0.5 rounded text-xs font-mono"
+                className="bg-[rgb(var(--background))] border border-[rgb(var(--border))] px-1.5 py-0.5 rounded text-[11px] font-mono mx-1"
                 {...props}
               />
             ) : (
               <code
-                className="block bg-[rgb(var(--muted))] p-2 rounded-lg font-mono text-xs overflow-x-auto my-2"
+                className="block font-mono text-[11px]"
                 {...props}
               />
             ),
-          pre: ({ ...props }) => <pre className="overflow-x-auto" {...props} />,
+          pre: ({ ...props }) => (
+            <div className="my-2 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--background))] overflow-hidden">
+              <pre className="m-0 p-3 overflow-x-auto" {...props} />
+            </div>
+          ),
           a: ({ ...props }) => (
             <a
-              className="text-[rgb(var(--foreground))] underline hover:opacity-80"
+              className="text-blue-400 font-medium hover:underline hover:text-blue-300 transition-colors"
+              target="_blank"
+              rel="noopener noreferrer"
               {...props}
             />
           ),
+          table: ({ ...props }) => (
+            <div className="my-3 overflow-x-auto rounded-lg border border-[rgb(var(--border))]">
+              <table className="w-full text-left text-xs border-collapse" {...props} />
+            </div>
+          ),
+          thead: ({ ...props }) => (
+            <thead className="bg-[rgb(var(--muted))]/50 font-semibold" {...props} />
+          ),
+          tbody: ({ ...props }) => <tbody className="divide-y divide-[rgb(var(--border))]" {...props} />,
+          tr: ({ ...props }) => (
+            <tr className="hover:bg-[rgb(var(--muted))]/20 transition-colors" {...props} />
+          ),
+          th: ({ ...props }) => (
+            <th className="p-2 border-b border-[rgb(var(--border))] whitespace-nowrap" {...props} />
+          ),
+          td: ({ ...props }) => <td className="p-2 whitespace-nowrap" {...props} />,
+          hr: ({ ...props }) => <hr className="my-4 border-[rgb(var(--border))]" {...props} />,
         }}
       >
         {content}
@@ -266,22 +289,24 @@ function ChatMessage({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className={`flex ${isUser ? "justify-end" : "justify-start"}`}
+      className={`flex w-full ${isUser ? "justify-end" : "justify-start"}`}
     >
       <div
-        className={`max-w-md md:max-w-2xl rounded-xl p-4 ${
-          isUser ? `${cardBg} border ${border}` : "bg-[rgb(var(--muted))] text-[rgb(var(--foreground))]"
+        className={`max-w-[85%] md:max-w-2xl rounded-2xl px-5 py-3.5 shadow-sm ${
+          isUser
+            ? "bg-[#27272a] text-white rounded-br-sm"
+            : `bg-[rgb(var(--card))] border border-[rgb(var(--border))] text-[rgb(var(--foreground))] rounded-bl-sm`
         }`}
       >
         {isUser ? (
-          <p className={`text-sm ${fg} whitespace-pre-wrap break-words`}>{message.content}</p>
+          <p className="text-sm font-medium leading-relaxed whitespace-pre-wrap break-words">{message.content}</p>
         ) : (
           <MarkdownContent content={message.content} fg={fg} />
         )}
 
-        <div className="flex items-center justify-between gap-2 mt-3">
-          <p className={`text-xs ${muted}`}>
-            {new Date(message.timestamp).toLocaleTimeString()}
+        <div className={`flex items-center justify-between gap-2 mt-2 ${isUser ? "opacity-80" : ""}`}>
+          <p className={`text-[10px] ${isUser ? "text-inherit" : muted}`}>
+            {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </p>
           {!isUser && (
             <button
@@ -289,7 +314,7 @@ function ChatMessage({
                 onCopy(message.content);
                 toast.success("Copied");
               }}
-              className={`p-1 hover:opacity-70 transition-opacity ${muted}`}
+              className={`p-1 hover:opacity-100 opacity-60 transition-opacity ${muted}`}
               title="Copy"
             >
               <BiCopy size={14} />
@@ -399,7 +424,7 @@ function QuickActionChips({
           onClick={() => onSelect(action.text)}
           className={`px-3 py-2 rounded-lg border ${border} hover:bg-[rgb(var(--muted))] transition-colors text-left`}
         >
-          <p className={`text-xs font-medium ${fg}`}>{action.label}</p>
+          <span className={`text-xs font-medium ${fg}`}>{action.label}</span>
         </motion.button>
       ))}
     </div>
@@ -462,6 +487,7 @@ export function FinanceGPT({
   shellBg,
   fg,
   muted,
+  onAddLog,
 }: {
   userData: any;
   derived: any;
@@ -473,6 +499,7 @@ export function FinanceGPT({
   shellBg: string;
   fg: string;
   muted: string;
+  onAddLog: (log: SpendLog) => void;
 }) {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
@@ -609,11 +636,39 @@ export function FinanceGPT({
       }
 
       const data = await response.json();
+      let assistantText = data.message;
+
+      // Check for JSON command block
+      const commandRegex = /```json\s*(\{[\s\S]*?"command"\s*:\s*"add_log"[\s\S]*?\})\s*```/;
+      const match = assistantText.match(commandRegex);
+
+      if (match) {
+        try {
+          const commandData = JSON.parse(match[1]);
+          if (commandData.command === "add_log") {
+            const newLog: SpendLog = {
+              id: crypto.randomUUID(),
+              amount: Number(commandData.amount),
+              category: commandData.category || "Other",
+              note: commandData.note || "AI Logged",
+              createdAt: new Date().toISOString(),
+              type: "expense",
+            };
+            onAddLog(newLog);
+            toast.success(`Logged ₹${newLog.amount} for ${newLog.category}`);
+            
+            // Remove the JSON block from the displayed message
+            assistantText = assistantText.replace(match[0], "").trim();
+          }
+        } catch (e) {
+          console.error("Failed to parse AI command", e);
+        }
+      }
 
       const assistantMessage: ChatMessage = {
         id: crypto.randomUUID(),
         role: "assistant",
-        content: data.message,
+        content: assistantText,
         timestamp: Date.now(),
       };
 
