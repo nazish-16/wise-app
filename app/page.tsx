@@ -6,7 +6,7 @@ import React, { useMemo, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { SiDedge } from "react-icons/si";
 import { BiMenu } from "react-icons/bi";
-import { MdDashboard, MdTrendingUp, MdSettings, MdAssignment, MdStart, MdLightbulb, MdRepeat, MdNotifications } from "react-icons/md";
+import { MdDashboard, MdTrendingUp, MdSettings, MdAssignment, MdStart, MdLightbulb, MdRepeat, MdNotifications, MdSend, MdRefresh, MdDownload } from "react-icons/md";
 import { AnimatePresence, motion } from "framer-motion";
 import { Toaster, toast } from "react-hot-toast";
 import { Bar, Doughnut } from "react-chartjs-2";
@@ -20,142 +20,436 @@ import {
   Legend,
 } from "chart.js";
 
+// Import new components
+import { TransactionsView } from "@/app/components/TransactionsView";
+import { ReportsView } from "@/app/components/ReportsView";
+import { GoalsView } from "@/app/components/GoalsView";
+import { InsightsView } from "@/app/components/InsightsView";
+import { NotificationsView } from "@/app/components/NotificationsView";
+import { RecurringView } from "@/app/components/RecurringView";
+
+// Import types and utils
+import { SpendLog, SpendCategory, Notification, SavingsGoal, RecurringRule, Cadence } from "@/app/lib/types";
+import {
+  formatINR,
+  isSameDay,
+  startOfWeek,
+  isSameMonth,
+  clamp01,
+  addDays,
+  getYMD,
+  safeParseJSON,
+  downloadJSON,
+} from "@/app/lib/utils";
+
 // Register Chart.js components
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
 
 type CheckStatus = "idle" | "safe" | "risky" | "no";
-type View = "dashboard" | "financegpt" | "settings" | "reports" | "goals" | "insights" | "recurring" | "notifications";
+type View = "dashboard" | "financegpt" | "settings" | "reports" | "goals" | "insights" | "recurring" | "notifications" | "transactions";
+type TransactionType = "income" | "expense";
 
-function formatINR(value: number) {
-  return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(value);
-}
-
-function isSameDay(a: Date, b: Date) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-
-function startOfWeek(d: Date) {
-  // Monday as start of week
-  const date = new Date(d);
-  const day = date.getDay(); // 0 Sun .. 6 Sat
-  const diff = (day === 0 ? -6 : 1) - day;
-  date.setDate(date.getDate() + diff);
-  date.setHours(0, 0, 0, 0);
-  return date;
-}
-
-function isSameMonth(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
-}
-
-function clamp01(n: number) {
-  return Math.max(0, Math.min(1, n));
-}
-
-function addDays(d: Date, days: number) {
-  const x = new Date(d);
-  x.setDate(x.getDate() + days);
-  return x;
-}
-
-function getYMD(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-type UserData = {
-  income: number;
-  fixedExpenses: number;
-  savingsGoal: number;
-  monthlySubscriptions: number;
-  [key: string]: unknown;
+type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: number;
 };
-
-type SpendCategory =
-  | "Food"
-  | "Transport"
-  | "Groceries"
-  | "Shopping"
-  | "Bills"
-  | "Health"
-  | "Entertainment"
-  | "Other";
 
 const CATEGORIES: SpendCategory[] = [
-  "Food",
-  "Transport",
-  "Groceries",
-  "Shopping",
-  "Bills",
-  "Health",
-  "Entertainment",
-  "Other",
+  "Food", "Transport", "Groceries", "Shopping", "Bills", "Health",
+  "Entertainment", "Salary", "Bonus", "Savings", "Other",
 ];
-
-type SpendLog = {
-  id: string;
-  amount: number;
-  note?: string;
-  category?: SpendCategory;
-  createdAt: string; // ISO
-};
-
-type CategoryBudgets = Record<SpendCategory, number>;
 
 const USER_KEY = "wise_user_data";
 const LOG_KEY = "wise_spend_logs";
 const BUDGETS_KEY = "wise_category_budgets";
+const RECURRING_KEY = "wise_recurring_rules";
+const GOALS_KEY = "wise_savings_goals";
+const NOTIF_KEY = "wise_notifications";
+const FINANCEGPT_CHAT_KEY = "wise_financegpt_chat";
+const SESSION_ID_KEY = "wise_session_id";
 
-function safeParseJSON<T>(value: string | null): T | null {
-  if (!value) return null;
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return null;
-  }
-}
+// ---------- Helper Functions ----------
 
-function downloadJSON(filename: string, data: unknown) {
-  if (typeof window === "undefined") return;
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
+function FinanceGPT({
+  userData,
+  derived,
+  logs,
+  budgets,
+  inputBase,
+  border,
+  cardBg,
+  shellBg,
+  fg,
+  muted,
+}: {
+  userData: any;
+  derived: any;
+  logs: SpendLog[];
+  budgets: Record<SpendCategory, number>;
+  inputBase: string;
+  border: string;
+  cardBg: string;
+  shellBg: string;
+  fg: string;
+  muted: string;
+}) {
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [inputValue, setInputValue] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [sessionId, setSessionId] = useState<string>("");
+  const [includeNotes, setIncludeNotes] = useState(false);
+  const [includeLast30Days, setIncludeLast30Days] = useState(true);
+  const [includeBudgets, setIncludeBudgets] = useState(true);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-// ---------- Stable Components (prevents input focus loss) ----------
+  // Initialize session ID and load chat history
+  useEffect(() => {
+    let id = localStorage.getItem(SESSION_ID_KEY);
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem(SESSION_ID_KEY, id);
+    }
+    setSessionId(id);
 
-function FinanceGPT() {
-  const border = "border-[rgb(var(--border))]";
-  const fg = "text-[rgb(var(--foreground))]";
-  const muted = "text-[rgb(var(--muted-foreground))]";
-  const cardBg = "bg-[rgb(var(--card))]";
+    const savedChat = safeParseJSON<ChatMessage[]>(localStorage.getItem(FINANCEGPT_CHAT_KEY));
+    if (savedChat) {
+      setChatMessages(savedChat);
+    }
+  }, []);
+
+  // Auto-scroll to bottom
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages]);
+
+  // Persist chat to localStorage
+  useEffect(() => {
+    if (chatMessages.length > 0) {
+      localStorage.setItem(FINANCEGPT_CHAT_KEY, JSON.stringify(chatMessages));
+    }
+  }, [chatMessages]);
+
+  const buildContextData = () => {
+    let logsToUse = logs;
+
+    // Filter to last 30 days if toggled
+    if (includeLast30Days) {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      logsToUse = logs.filter((l) => new Date(l.createdAt) >= thirtyDaysAgo);
+    }
+
+    const categoryTotals: Record<string, number> = {};
+    CATEGORIES.forEach((c) => (categoryTotals[c] = 0));
+    logsToUse.forEach((l) => {
+      const c = l.category || "Other";
+      categoryTotals[c] = (categoryTotals[c] || 0) + l.amount;
+    });
+
+    const topCategories = Object.entries(categoryTotals)
+      .filter(([, v]) => v > 0)
+      .sort((a, b) => (b[1] as number) - (a[1] as number))
+      .slice(0, 8);
+
+    const contextData: any = {
+      income: userData.income || 0,
+      fixedTotal: derived.fixedTotal || 0,
+      savingsGoal: derived.goal || 0,
+      spendableMonth: derived.spendableMonth || 0,
+      spentThisMonth: derived.spentThisMonth || 0,
+      remainingSpendable: derived.remainingSpendable || 0,
+      safeSpendToday: derived.safeSpendToday || 0,
+      spentToday: derived.spentToday || 0,
+      weekSpent: derived.weekSpent || 0,
+      deltaWeek: derived.deltaWeek || 0,
+      expectedThisWeek: derived.expectedThisWeek || 0,
+      categoryTotals,
+      topCategories,
+      projectedMonthSpend: derived.projectedMonthSpend || 0,
+      projectedRemaining: derived.projectedRemaining || 0,
+      noSpendStreak: derived.noSpendStreak || 0,
+      daysInMonth: derived.daysInMonth || 0,
+      dayOfMonth: derived.dayOfMonth || 0,
+      daysLeft: derived.daysLeft || 0,
+    };
+
+    if (includeBudgets) {
+      contextData.budgets = budgets;
+    }
+
+    return contextData;
+  };
+
+  const sendMessage = async () => {
+    if (!inputValue.trim() || isLoading) return;
+
+    const userMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: inputValue,
+      timestamp: Date.now(),
+    };
+
+    const updatedMessages = [...chatMessages, userMessage];
+    setChatMessages(updatedMessages);
+    setInputValue("");
+    setIsLoading(true);
+
+    try {
+      const contextData = buildContextData();
+
+      const response = await fetch("/api/financegpt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: updatedMessages.map((m) => ({ role: m.role, content: m.content })),
+          context: contextData,
+          options: {
+            sessionId,
+            includeNotes,
+            // ✅ IMPORTANT: Send a model you ACTUALLY have (from ListModels)
+            model: "models/gemini-2.5-flash",
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to get response");
+      }
+
+      const data = await response.json();
+
+      const assistantMessage: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: data.message,
+        timestamp: Date.now(),
+      };
+
+      setChatMessages((prev) => [...prev, assistantMessage]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to send message");
+      setChatMessages((prev) => prev.slice(0, -1));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const resetChat = () => {
+    if (confirm("Clear all chat history?")) {
+      setChatMessages([]);
+      localStorage.removeItem(FINANCEGPT_CHAT_KEY);
+    }
+  };
+
+  const exportChat = () => {
+    downloadJSON(`financegpt-chat-${new Date().toISOString().split("T")[0]}.json`, {
+      messages: chatMessages,
+      exportedAt: new Date().toISOString(),
+    });
+  };
+
+  const quickPrompts = [
+    { label: "Can I spend ₹500 today?", text: "Can I safely spend ₹500 today?" },
+    {
+      label: "How to reduce spending?",
+      text: "Based on my spending patterns, what's the best way to reduce my expenses?",
+    },
+    { label: "Biggest spending leak?", text: "What's my biggest spending leak this month?" },
+    { label: "Savings strategy", text: "Help me create a realistic savings plan for the next 3 months." },
+  ];
 
   return (
-    <div className="h-full flex items-center justify-center p-6">
-      <div className={`w-full max-w-xl rounded-lg border ${border} ${cardBg} p-6`}>
-        <h2 className={`text-sm font-semibold ${fg}`}>FinanceGPT</h2>
-        <p className={`text-sm ${muted} mt-2 leading-relaxed`}>
-          Coming soon. We’ll connect Gemini here. For now, the dashboard focuses on real-time spend checks
-          and staying on track.
-        </p>
+    <div className="h-full flex flex-col p-4 md:p-6 space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className={`text-xl font-semibold ${fg}`}>FinanceGPT</h2>
+          <p className={`text-xs ${muted} mt-1`}>Powered by Google Gemini • Not financial advice</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={exportChat} className="p-2 rounded hover:bg-[rgb(var(--muted))]" title="Export chat">
+            <MdDownload size={18} />
+          </button>
+          <button onClick={resetChat} className="p-2 rounded hover:bg-[rgb(var(--muted))]" title="Reset chat">
+            <MdRefresh size={18} />
+          </button>
+        </div>
+      </div>
+
+      {/* Context toggles */}
+      <div className={`rounded-lg border ${border} ${cardBg} p-3 flex flex-wrap gap-2`}>
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            checked={includeLast30Days}
+            onChange={(e) => setIncludeLast30Days(e.target.checked)}
+            className="w-4 h-4"
+          />
+          <span className={muted}>Last 30 days only</span>
+        </label>
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            checked={includeBudgets}
+            onChange={(e) => setIncludeBudgets(e.target.checked)}
+            className="w-4 h-4"
+          />
+          <span className={muted}>Include budgets</span>
+        </label>
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            checked={includeNotes}
+            onChange={(e) => setIncludeNotes(e.target.checked)}
+            className="w-4 h-4"
+          />
+          <span className={muted}>Include spending notes</span>
+        </label>
+      </div>
+
+      {/* Quick prompts */}
+      {chatMessages.length === 0 && (
+        <div className="space-y-2">
+          <p className={`text-xs font-medium ${muted}`}>Quick prompts:</p>
+          <div className="flex flex-wrap gap-2">
+            {quickPrompts.map((prompt, idx) => (
+              <button
+                key={idx}
+                onClick={() => setInputValue(prompt.text)}
+                className={`px-3 py-2 rounded-lg border ${border} text-sm ${muted} hover:bg-[rgb(var(--muted))] transition-colors`}
+              >
+                {prompt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Chat messages */}
+      <div className={`flex-1 overflow-y-auto space-y-4 rounded-lg border ${border} ${cardBg} p-4`}>
+        {chatMessages.length === 0 ? (
+          <div className="h-full flex items-center justify-center">
+            <p className={`text-sm ${muted} text-center`}>
+              Start a conversation about your finances. Ask anything about spending, budgets, or goals.
+            </p>
+          </div>
+        ) : (
+          chatMessages.map((msg) => (
+            <motion.div
+              key={msg.id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+            >
+              <div
+                className={`max-w-xs md:max-w-md lg:max-w-lg rounded-lg p-4 ${
+                  msg.role === "user" ? `${cardBg} border ${border}` : `bg-[rgb(var(--muted))]`
+                }`}
+              >
+                {msg.role === "assistant" ? (
+                  <div className={`text-sm ${fg} space-y-2 whitespace-pre-wrap break-words`}>
+                    {msg.content.split("\n").map((line, idx) => {
+                      if (line.startsWith("## ")) {
+                        return (
+                          <h2 key={idx} className="text-base font-bold mt-2 mb-1">
+                            {line.replace(/^## /, "")}
+                          </h2>
+                        );
+                      }
+                      if (line.startsWith("# ")) {
+                        return (
+                          <h1 key={idx} className="text-lg font-bold mt-3 mb-2">
+                            {line.replace(/^# /, "")}
+                          </h1>
+                        );
+                      }
+                      if (line.startsWith("- ")) {
+                        return (
+                          <div key={idx} className="ml-4 flex gap-2">
+                            <span>•</span>
+                            <span>{line.replace(/^- /, "")}</span>
+                          </div>
+                        );
+                      }
+                      if (/^\d+\./.test(line)) {
+                        return (
+                          <div key={idx} className="ml-4">
+                            {line}
+                          </div>
+                        );
+                      }
+                      if (line.trim()) {
+                        return (
+                          <p key={idx} className="mb-2">
+                            {line.split("**").map((part, i) =>
+                              i % 2 === 0 ? part : <strong key={i}>{part}</strong>
+                            )}
+                          </p>
+                        );
+                      }
+                      return <div key={idx} className="h-1" />;
+                    })}
+                  </div>
+                ) : (
+                  <p className={`text-sm ${fg} whitespace-pre-wrap break-words`}>{msg.content}</p>
+                )}
+                <p className={`text-xs ${muted} mt-2`}>{new Date(msg.timestamp).toLocaleTimeString()}</p>
+              </div>
+            </motion.div>
+          ))
+        )}
+        {isLoading && (
+          <div className="flex justify-start">
+            <div className={`rounded-lg p-3 bg-[rgb(var(--muted))]`}>
+              <div className="flex gap-2">
+                <div className="w-2 h-2 bg-[rgb(var(--foreground))] rounded-full animate-bounce"></div>
+                <div
+                  className="w-2 h-2 bg-[rgb(var(--foreground))] rounded-full animate-bounce"
+                  style={{ animationDelay: "0.2s" }}
+                ></div>
+                <div
+                  className="w-2 h-2 bg-[rgb(var(--foreground))] rounded-full animate-bounce"
+                  style={{ animationDelay: "0.4s" }}
+                ></div>
+              </div>
+            </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input */}
+      <div className={`flex gap-2`}>
+        <textarea
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              sendMessage();
+            }
+          }}
+          placeholder="Ask me anything about your finances... (Shift+Enter for new line)"
+          className={`${inputBase} flex-1 resize-none max-h-20 py-2`}
+          rows={2}
+        />
+        <button
+          onClick={sendMessage}
+          disabled={isLoading || !inputValue.trim()}
+          className="p-3 rounded-lg bg-[rgb(var(--foreground))] text-[rgb(var(--background))] hover:opacity-90 disabled:opacity-50 transition-opacity"
+        >
+          <MdSend size={20} />
+        </button>
       </div>
     </div>
   );
 }
 
-function Settings({ userData, onUpdate }: { userData: UserData; onUpdate: () => void }) {
+function Settings({ userData, onUpdate }: any) {
   const [income, setIncome] = useState<string>(String(userData.income || ""));
   const [fixedExpenses, setFixedExpenses] = useState<string>(String(userData.fixedExpenses || ""));
   const [savingsGoal, setSavingsGoal] = useState<string>(String(userData.savingsGoal || ""));
@@ -177,7 +471,7 @@ function Settings({ userData, onUpdate }: { userData: UserData; onUpdate: () => 
     "inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-colors border border-[rgb(var(--border))] text-[rgb(var(--foreground))] hover:bg-[rgb(var(--muted))]";
 
   const handleSave = () => {
-    const updated: UserData = {
+    const updated = {
       ...userData,
       income: Number(income || 0),
       fixedExpenses: Number(fixedExpenses || 0),
@@ -275,7 +569,7 @@ function HeaderLogo({ border }: { border: string }) {
         alt="Wise"
         width={35}
         height={35}
-        className="hover:bg-[#4d4d4d7c] rounded-md"
+        className="bg-[#4d4d4d7c] hover:bg-[#4d4d4d4b] rounded-md p-1"
       />
       <div className={`leading-tight border ${border} rounded-full p-1 hover:bg-[#4d4d4d7c]`}>
         <SiDedge size={17} />
@@ -291,14 +585,7 @@ function ProgressBar({
   border,
   shellBg,
   muted,
-}: {
-  value: number; // 0..1
-  labelLeft: string;
-  labelRight: string;
-  border: string;
-  shellBg: string;
-  muted: string;
-}) {
+}: any) {
   const v = clamp01(value);
   return (
     <div className={`rounded-lg border ${border} ${shellBg} p-3`}>
@@ -358,7 +645,6 @@ function DashboardView({
   derived,
   userData,
   logs,
-
   checkAmount,
   setCheckAmount,
   checkNote,
@@ -368,49 +654,18 @@ function DashboardView({
   checkStatus,
   checkMessage,
   runCheck,
-
   deleteLog,
   clearAllLogs,
-
   inputBase,
   buttonPrimary,
   buttonDanger,
   buttonGhost,
-
   border,
   cardBg,
   shellBg,
   fg,
   muted,
-}: {
-  derived: Derived;
-  userData: UserData;
-  logs: SpendLog[];
-
-  checkAmount: string;
-  setCheckAmount: React.Dispatch<React.SetStateAction<string>>;
-  checkNote: string;
-  setCheckNote: React.Dispatch<React.SetStateAction<string>>;
-  checkCategory: SpendCategory;
-  setCheckCategory: React.Dispatch<React.SetStateAction<SpendCategory>>;
-  checkStatus: CheckStatus;
-  checkMessage: string;
-  runCheck: () => void;
-
-  deleteLog: (id: string) => void;
-  clearAllLogs: () => void;
-
-  inputBase: string;
-  buttonPrimary: string;
-  buttonDanger: string;
-  buttonGhost: string;
-
-  border: string;
-  cardBg: string;
-  shellBg: string;
-  fg: string;
-  muted: string;
-}) {
+}: any) {
   // ---------- Subtle feature-animations state ----------
   const [isLogging, setIsLogging] = useState(false);
   const [pulseKey, setPulseKey] = useState(0);
@@ -430,26 +685,18 @@ function DashboardView({
   }, [derived.spentThisMonth]);
 
   // ---------- Category budgets ----------
-  const defaultBudgets: CategoryBudgets = useMemo(() => {
-    const base: CategoryBudgets = {
-      Food: 0,
-      Transport: 0,
-      Groceries: 0,
-      Shopping: 0,
-      Bills: 0,
-      Health: 0,
-      Entertainment: 0,
-      Other: 0,
-    };
+  const defaultBudgets: Record<SpendCategory, number> = useMemo(() => {
+    const base: Record<SpendCategory, number> = {} as any;
+    CATEGORIES.forEach((c) => (base[c] = 0));
     return base;
   }, []);
 
-  const [budgets, setBudgets] = useState<CategoryBudgets>(defaultBudgets);
+  const [budgets, setBudgets] = useState<Record<SpendCategory, number>>(defaultBudgets);
   const [budgetsOpen, setBudgetsOpen] = useState(false);
   const [budgetSaved, setBudgetSaved] = useState(false);
 
   useEffect(() => {
-    const stored = safeParseJSON<CategoryBudgets>(localStorage.getItem(BUDGETS_KEY));
+    const stored = safeParseJSON<Record<SpendCategory, number>>(localStorage.getItem(BUDGETS_KEY));
     if (stored) setBudgets({ ...defaultBudgets, ...stored });
   }, [defaultBudgets]);
 
@@ -465,7 +712,7 @@ function DashboardView({
 
   const filteredRecent = useMemo(() => {
     const q = searchNote.trim().toLowerCase();
-    return derived.recent.filter((l) => {
+    return derived.recent.filter((l: { category: any; note: any; }) => {
       const catOk = filterCategory === "All" ? true : (l.category || "Other") === filterCategory;
       const note = (l.note || "").toLowerCase();
       const noteOk = q.length === 0 ? true : note.includes(q);
@@ -517,8 +764,8 @@ function DashboardView({
 
   const insightText =
     derived.spendVsExpected <= 0
-      ? `You’re under the expected spend by ₹${formatINR(Math.abs(derived.spendVsExpected))}.`
-      : `You’re over the expected spend by ₹${formatINR(derived.spendVsExpected)}.`;
+      ? `You're under the expected spend by ₹${formatINR(Math.abs(derived.spendVsExpected))}.`
+      : `You're over the expected spend by ₹${formatINR(derived.spendVsExpected)}.`;
 
   const projectionTone = derived.projectedRemaining > 0 ? "text-[rgb(var(--success))]" : "text-red-500";
 
@@ -686,18 +933,18 @@ function DashboardView({
           </div>
 
           <motion.div
-            animate={isLogging ? { scale: 1.02 } : { scale: 1 }}
+            animate={checkStatus !== "idle" ? { scale: 1.02 } : { scale: 1 }}
             transition={{ duration: 0.18 }}
             className={`rounded-lg px-3 py-2 ${statusBg} ${statusRing}`}
           >
             <p className={`text-xs font-medium ${statusColor}`}>
               {checkStatus === "idle"
-                ? "Enter "
+                ? "Enter amount"
                 : checkStatus === "safe"
-                ? "Safe"
+                ? "✅ Safe"
                 : checkStatus === "risky"
-                ? "Risky"
-                : "Not advised"}
+                ? "⚠️ Risky"
+                : "❌ Not advised"}
             </p>
           </motion.div>
         </div>
@@ -717,90 +964,60 @@ function DashboardView({
           ))}
         </div>
 
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-6 gap-3">
-          <div className="md:col-span-2">
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="md:col-span-1">
             <label className={`block text-xs font-medium mb-1 ${muted}`}>Amount</label>
             <div className="relative">
               <span className={`absolute left-2 top-1/2 -translate-y-1/2 text-sm ${muted}`}>₹</span>
               <input
                 className={`${inputBase} pl-7`}
-                value={checkAmount}
                 inputMode="numeric"
+                value={checkAmount}
                 onChange={(e) => setCheckAmount(e.target.value.replace(/[^\d]/g, ""))}
-                placeholder="e.g., 250"
+                placeholder="0"
               />
             </div>
           </div>
 
-          <div className="md:col-span-2">
-            <label className={`block text-xs font-medium mb-1 ${muted}`}>Note (optional)</label>
-            <input
-              className={inputBase}
-              value={checkNote}
-              onChange={(e) => setCheckNote(e.target.value)}
-              placeholder="e.g., coffee, cab, groceries..."
-            />
-          </div>
-
           <div className="md:col-span-1">
             <label className={`block text-xs font-medium mb-1 ${muted}`}>Category</label>
-            <select className={inputBase} value={checkCategory} onChange={(e) => setCheckCategory(e.target.value as SpendCategory)}>
+            <select
+              value={checkCategory}
+              onChange={(e) => setCheckCategory(e.target.value as SpendCategory)}
+              className={inputBase}
+            >
               {CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
           </div>
 
+          <div className="md:col-span-1">
+            <label className={`block text-xs font-medium mb-1 ${muted}`}>Note (optional)</label>
+            <input
+              type="text"
+              value={checkNote}
+              onChange={(e) => setCheckNote(e.target.value)}
+              placeholder="e.g., coffee"
+              className={inputBase}
+            />
+          </div>
+
           <div className="md:col-span-1 flex items-end">
             <button
-              onClick={() => {
-                setIsLogging(true);
-                runCheck(); // will toast inside runCheck now
-                setTimeout(() => setIsLogging(false), 260);
-              }}
-              className={`${buttonPrimary} w-full transition-transform active:scale-[0.98]`}
-              disabled={!derived.safeSpendToday}
-              type="button"
+              onClick={runCheck}
+              className={`${buttonPrimary} w-full`}
             >
-              {isLogging ? "Logging..." : "Check & Log"}
+              Check
             </button>
           </div>
         </div>
 
-        <motion.p
-          key={`msg-${checkMessage}-${checkStatus}`}
-          initial={{ opacity: 0, y: 4 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.18 }}
-          className={`text-sm mt-3 ${statusColor}`}
-        >
-          {checkMessage || "Enter  to see guidance."}
-        </motion.p>
-
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-          <motion.div layout className={`rounded-lg border ${border} ${shellBg} p-3`}>
-            <p className={`text-xs ${muted}`}>Spent Today</p>
-            <p className={`text-sm font-semibold ${fg} mt-1`}>₹{formatINR(derived.spentToday)}</p>
+        {checkStatus !== "idle" && (
+          <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="mt-3 p-3 rounded-lg bg-[rgba(0,0,0,0.2)]">
+            <p className={`text-sm ${statusColor}`}>{checkMessage}</p>
           </motion.div>
-
-          <motion.div layout className={`rounded-lg border ${border} ${shellBg} p-3`}>
-            <p className={`text-xs ${muted}`}>Spent This Week</p>
-            <p className={`text-sm font-semibold ${fg} mt-1`}>₹{formatINR(derived.weekSpent)}</p>
-            <p className={`text-xs ${muted} mt-1`}>Expected: ₹{formatINR(derived.expectedThisWeek)}</p>
-          </motion.div>
-
-          <motion.div layout className={`rounded-lg border ${border} ${shellBg} p-3`}>
-            <p className={`text-xs ${muted}`}>Week Delta</p>
-            <p className={`text-sm font-semibold mt-1 ${derived.deltaWeek <= 0 ? "text-[rgb(var(--success))]" : "text-red-500"}`}>
-              {derived.deltaWeek <= 0 ? "On track" : "Over budget"}{" "}
-              <span className={muted}>
-                ({derived.deltaWeek >= 0 ? "+" : "−"}₹{formatINR(Math.abs(derived.deltaWeek))})
-              </span>
-            </p>
-          </motion.div>
-        </div>
+        )}
       </div>
 
       {/* 7-day spend trend (Chart.js Bar) */}
@@ -813,14 +1030,14 @@ function DashboardView({
           <div className="text-right">
             <p className={`text-xs ${muted}`}>Avg/day (7d)</p>
             <p className={`text-sm font-semibold ${fg}`}>
-              ₹{formatINR(Math.round(derived.last7.reduce((s, x) => s + x.total, 0) / 7))}
+              ₹{formatINR(Math.round(derived.last7.reduce((s: any, x: { total: any; }) => s + x.total, 0) / 7))}
             </p>
           </div>
         </div>
         <div className="mt-4" style={{ minHeight: 200 }}>
           <ThemedBarChart 
-            data={derived.last7.map((x) => x.total)} 
-            labels={derived.last7.map((x) => new Date(x.date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }))} 
+            data={derived.last7.map((x: { total: any; }) => x.total)} 
+            labels={derived.last7.map((x: { date: string | number | Date; }) => new Date(x.date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }))} 
           />
         </div>
       </div>
@@ -836,8 +1053,8 @@ function DashboardView({
           <div className="mt-4" style={{ minHeight: 220 }}>
             {derived.topCategories.length > 0 ? (
               <ThemedDoughnutChart 
-                data={derived.topCategories.map((x) => x[1])} 
-                labels={derived.topCategories.map((x) => x[0])} 
+                data={derived.topCategories.map((x: any[]) => x[1])} 
+                labels={derived.topCategories.map((x: any[]) => x[0])} 
               />
             ) : (
               <div className={`rounded-lg border ${border} ${shellBg} p-4 h-full flex items-center justify-center`}>
@@ -859,7 +1076,7 @@ function DashboardView({
                 <p className={`text-sm ${muted}`}>Log a spend to see details.</p>
               </div>
             ) : (
-              derived.topCategories.map(([cat, total], idx) => {
+              derived.topCategories.map(([cat, total]: any, idx: any) => {
                 const share = derived.spentThisMonth > 0 ? total / derived.spentThisMonth : 0;
                 return (
                   <div key={cat} className={`rounded-lg border ${border} ${shellBg} p-3`}>
@@ -1088,7 +1305,7 @@ function DashboardView({
               <p className={`text-sm ${muted}`}>No logs match your filter. Try changing category/search.</p>
             </div>
           ) : (
-            filteredRecent.map((l) => (
+            filteredRecent.map((l: { id: React.Key | null | undefined; amount: number; category: any; note: any; createdAt: string | number | Date; }) => (
               <motion.div
                 key={l.id}
                 initial={{ opacity: 0, y: 6 }}
@@ -1121,20 +1338,41 @@ export default function Home() {
   const [currentView, setCurrentView] = useState<View>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const [userData, setUserData] = useState<UserData | null>(null);
+  const [userData, setUserData] = useState<any>(null);
   const [logs, setLogs] = useState<SpendLog[]>([]);
+  const [recurring, setRecurring] = useState<RecurringRule[]>([]);
+  const [goals, setGoals] = useState<SavingsGoal[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Spend check input
   const [checkAmount, setCheckAmount] = useState<string>("");
   const [checkNote, setCheckNote] = useState<string>("");
   const [checkCategory, setCheckCategory] = useState<SpendCategory>("Other");
   const [checkStatus, setCheckStatus] = useState<CheckStatus>("idle");
   const [checkMessage, setCheckMessage] = useState<string>("");
 
-  // Load user data + logs
+  // Add budgets state for use in FinanceGPT
+  const defaultBudgets: Record<SpendCategory, number> = useMemo(() => {
+    const base: Record<SpendCategory, number> = {} as any;
+    CATEGORIES.forEach((c) => (base[c] = 0));
+    return base;
+  }, []);
+  const [budgets, setBudgets] = useState<Record<SpendCategory, number>>(defaultBudgets);
+
+  // Load budgets from localStorage
   useEffect(() => {
-    const data = safeParseJSON<UserData>(localStorage.getItem(USER_KEY));
+    const stored = safeParseJSON<Record<SpendCategory, number>>(localStorage.getItem(BUDGETS_KEY));
+    if (stored) setBudgets({ ...defaultBudgets, ...stored });
+  }, [defaultBudgets]);
+
+  // Save budgets to localStorage when changed
+  useEffect(() => {
+    if (!isLoading) localStorage.setItem(BUDGETS_KEY, JSON.stringify(budgets));
+  }, [budgets, isLoading]);
+
+  // Load all data
+  useEffect(() => {
+    const data = safeParseJSON<any>(localStorage.getItem(USER_KEY));
     if (!data) {
       router.push("/onboarding");
       return;
@@ -1142,17 +1380,60 @@ export default function Home() {
     setUserData(data);
 
     const storedLogs = safeParseJSON<SpendLog[]>(localStorage.getItem(LOG_KEY)) || [];
-    setLogs(storedLogs);
+    // Migrate: set missing category to "Other"
+    const migratedLogs = storedLogs.map(l => ({ ...l, category: l.category || "Other" }));
+    setLogs(migratedLogs);
+
+    const storedRecurring = safeParseJSON<RecurringRule[]>(localStorage.getItem(RECURRING_KEY)) || [];
+    setRecurring(storedRecurring);
+
+    const storedGoals = safeParseJSON<SavingsGoal[]>(localStorage.getItem(GOALS_KEY)) || [];
+    setGoals(storedGoals);
+
+    const storedNotifs = safeParseJSON<Notification[]>(localStorage.getItem(NOTIF_KEY)) || [];
+    setNotifications(storedNotifs);
+
+    // Load budgets as well
+    const storedBudgets = safeParseJSON<Record<SpendCategory, number>>(localStorage.getItem(BUDGETS_KEY));
+    if (storedBudgets) setBudgets({ ...defaultBudgets, ...storedBudgets });
 
     setIsLoading(false);
-  }, [router]);
+  }, [router, defaultBudgets]);
 
-  // Save logs to localStorage whenever they change
+  // Save data
   useEffect(() => {
     if (!isLoading) localStorage.setItem(LOG_KEY, JSON.stringify(logs));
   }, [logs, isLoading]);
 
-  const derived = useMemo<Derived | null>(() => {
+  useEffect(() => {
+    if (!isLoading) localStorage.setItem(RECURRING_KEY, JSON.stringify(recurring));
+  }, [recurring, isLoading]);
+
+  useEffect(() => {
+    if (!isLoading) localStorage.setItem(GOALS_KEY, JSON.stringify(goals));
+  }, [goals, isLoading]);
+
+  useEffect(() => {
+    if (!isLoading) localStorage.setItem(NOTIF_KEY, JSON.stringify(notifications));
+  }, [notifications, isLoading]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "n" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        setCurrentView("transactions");
+      }
+      if (e.key === "Escape") {
+        // Close modals if needed
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // ---------- Derived State ----------
+  const derived = useMemo<any>(() => {
     if (!userData) return null;
 
     const income = Number(userData.income || 0);
@@ -1305,7 +1586,7 @@ export default function Home() {
   }, [userData, logs]);
 
   const refreshData = () => {
-    const data = safeParseJSON<UserData>(localStorage.getItem(USER_KEY));
+    const data = safeParseJSON<any>(localStorage.getItem(USER_KEY));
     if (data) setUserData(data);
   };
 
@@ -1315,7 +1596,7 @@ export default function Home() {
     const amt = Number(checkAmount || 0);
     if (amt <= 0) {
       setCheckStatus("idle");
-      setCheckMessage("Enter  to see guidance.");
+      setCheckMessage("Enter amount to see guidance.");
       return;
     }
 
@@ -1325,6 +1606,7 @@ export default function Home() {
       note: checkNote.trim() || undefined,
       category: checkCategory,
       createdAt: new Date().toISOString(),
+      type: "expense"
     };
 
     setLogs((prev) => [entry, ...prev]);
@@ -1333,27 +1615,127 @@ export default function Home() {
 
     if (amt <= safe) {
       setCheckStatus("safe");
-      setCheckMessage("✅ Safe — you’ll still stay on track.");
+      setCheckMessage("✅ Safe — you'll still stay on track.");
     } else if (amt <= Math.floor(safe * 1.5)) {
       setCheckStatus("risky");
       setCheckMessage("⚠️ Risky — your daily safe spend will shrink.");
     } else {
       setCheckStatus("no");
-      setCheckMessage("❌ Not advised — you’ll likely miss your goal.");
+      setCheckMessage("❌ Not advised — you'll likely miss your goal.");
     }
 
-    // ✅ React Hot Toast instead of the in-page toast
     toast.success("Logged. Calculations updated in real-time.");
 
     setCheckAmount("");
   }
 
   function deleteLog(id: string) {
+    const deleted = logs.find(l => l.id === id);
     setLogs((prev) => prev.filter((l) => l.id !== id));
+    
+    // Undo feature
+    if (deleted) {
+      toast((t) => (
+        <span>
+          Deleted. 
+          <button
+            onClick={() => {
+              setLogs(prev => [deleted, ...prev]);
+              toast.dismiss(t.id);
+            }}
+            className="ml-2 underline"
+          >
+            Undo
+          </button>
+        </span>
+      ));
+    }
   }
 
   function clearAllLogs() {
-    setLogs([]);
+    if (window.confirm("Are you sure? This cannot be undone.")) {
+      setLogs([]);
+      toast.success("All logs cleared");
+    }
+  }
+
+  function addLog(log: SpendLog) {
+    setLogs((prev) => [log, ...prev]);
+  }
+
+  function addRecurringRule(rule: RecurringRule) {
+    setRecurring((prev) => [rule, ...prev]);
+  }
+
+  function deleteRecurringRule(id: string) {
+    setRecurring((prev) => prev.filter((r) => r.id !== id));
+  }
+
+  function runDueRecurring() {
+    const now = new Date();
+    const newLogs: SpendLog[] = [];
+
+    recurring.forEach((rule) => {
+      if (!rule.active || new Date(rule.nextRunDate) > now) return;
+
+      const entry: SpendLog = {
+        id: crypto.randomUUID(),
+        amount: rule.amount,
+        note: rule.title,
+        category: rule.category,
+        createdAt: now.toISOString(),
+        type: rule.type,
+      };
+
+      newLogs.push(entry);
+
+      const cadenceMap: Record<Cadence, number> = {
+        daily: 1,
+        weekly: 7,
+        monthly: 30,
+        yearly: 365,
+      };
+      const newNextRun = new Date(rule.nextRunDate);
+      newNextRun.setDate(newNextRun.getDate() + (cadenceMap[rule.cadence] || 1));
+      rule.nextRunDate = newNextRun.toISOString();
+    });
+
+    setLogs((prev) => [...newLogs, ...prev]);
+    setRecurring([...recurring]);
+
+    if (newLogs.length > 0) {
+      toast.success(`Processed ${newLogs.length} recurring transaction(s)`);
+    }
+  }
+
+  function addGoal(goal: SavingsGoal) {
+    setGoals((prev) => [goal, ...prev]);
+  }
+
+  function deleteGoal(id: string) {
+    setGoals((prev) => prev.filter((g) => g.id !== id));
+  }
+
+  function addContribution(goalId: string, amount: number) {
+    setGoals((prev) =>
+      prev.map((g) =>
+        g.id === goalId ? { ...g, currentSaved: g.currentSaved + amount } : g
+      )
+    );
+  }
+
+  function addNotification(notif: Notification) {
+    setNotifications((prev) => [notif, ...prev]);
+  }
+
+  function deleteNotification(id: string) {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  }
+
+  function markNotificationRead(id: string) {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+    );
   }
 
   if (isLoading || !userData || !derived) {
@@ -1391,10 +1773,11 @@ export default function Home() {
 
   const sidebarItems = [
     { id: "dashboard", label: "Dashboard", icon: MdDashboard },
-    { id: "reports", label: "Reports", icon: MdAssignment },
-    { id: "goals", label: "Goals", icon: MdStart },
-    { id: "insights", label: "Insights", icon: MdLightbulb },
+    { id: "transactions", label: "Transactions", icon: MdAssignment },
     { id: "recurring", label: "Recurring", icon: MdRepeat },
+    { id: "goals", label: "Goals", icon: MdStart },
+    { id: "reports", label: "Reports", icon: MdAssignment },
+    { id: "insights", label: "Insights", icon: MdLightbulb },
     { id: "financegpt", label: "FinanceGPT", icon: MdTrendingUp },
   ];
 
@@ -1447,12 +1830,8 @@ export default function Home() {
                     key={item.id}
                     type="button"
                     onClick={() => {
-                      if (["dashboard", "financegpt", "settings"].includes(item.id)) {
-                        setCurrentView(item.id as View);
-                        setSidebarOpen(false);
-                      } else {
-                        toast("Coming soon! 🚀", { icon: "⏳" });
-                      }
+                                           setCurrentView(item.id as View);
+                      setSidebarOpen(false);
                     }}
                     className={`${navBtn} ${
                       isActive ? navBtnIdle + " bg-[rgb(var(--muted))]" : navBtnMuted
@@ -1477,10 +1856,8 @@ export default function Home() {
                       key={item.id}
                       type="button"
                       onClick={() => {
-                        if (["settings", "notifications"].includes(item.id)) {
-                          setCurrentView(item.id as View);
-                          setSidebarOpen(false);
-                        }
+                        setCurrentView(item.id as View);
+                        setSidebarOpen(false);
                       }}
                       className={`${navBtn} ${
                         isActive ? navBtnIdle + " bg-[rgb(var(--muted))]" : navBtnMuted
@@ -1496,9 +1873,9 @@ export default function Home() {
               {/* Monthly Summary Card */}
               <div className={`rounded-lg border ${border} ${cardBg} p-3`}>
                 <p className={`text-xs ${muted}`}>This month remaining</p>
-                <p className={`text-sm font-semibold ${fg} mt-1`}>₹{formatINR(derived.remainingSpendable)}</p>
+                <p className={`text-sm font-semibold ${fg} mt-1`}>₹{formatINR(derived?.remainingSpendable || 0)}</p>
                 <p className={`text-xs ${muted} mt-1`}>
-                  Safe/day: {derived.safeSpendToday === null ? "—" : `₹${formatINR(derived.safeSpendToday)}`}
+                  Safe/day: {derived?.safeSpendToday === null ? "—" : `₹${formatINR(derived?.safeSpendToday || 0)}`}
                 </p>
               </div>
             </div>
@@ -1506,7 +1883,7 @@ export default function Home() {
         </aside>
 
         {/* Main */}
-        <main className="flex-1 min-w-0 md:ml-70 flex flex-col h-screen overflow-hidden">
+        <main className="flex-1 min-w-0 md:ml-[280px] flex flex-col h-screen overflow-hidden">
           {/* Topbar */}
           <div className={`sticky top-0 z-30 ${shellBg} border-b ${border} shrink-0`}>
             <div className="flex items-center justify-between gap-3 px-4 py-3 md:px-6">
@@ -1524,19 +1901,21 @@ export default function Home() {
                   <p className={`text-sm font-semibold ${fg}`}>
                     {currentView === "dashboard"
                       ? "Dashboard"
-                      : currentView === "financegpt"
-                      ? "FinanceGPT"
-                      : currentView === "settings"
-                      ? "Settings"
-                      : currentView === "reports"
-                      ? "Reports"
-                      : currentView === "goals"
-                      ? "Goals"
-                      : currentView === "insights"
-                      ? "Insights"
+                      : currentView === "transactions"
+                      ? "Transactions"
                       : currentView === "recurring"
                       ? "Recurring"
-                      : "Notifications"}
+                      : currentView === "goals"
+                      ? "Goals"
+                      : currentView === "reports"
+                      ? "Reports"
+                      : currentView === "insights"
+                      ? "Insights"
+                      : currentView === "notifications"
+                      ? "Notifications"
+                      : currentView === "settings"
+                      ? "Settings"
+                      : "FinanceGPT"}
                   </p>
                   <p className={`text-xs ${muted}`}>
                     {new Date().toLocaleDateString(undefined, {
@@ -1553,14 +1932,14 @@ export default function Home() {
                 <div className={`hidden md:block text-right`}>
                   <p className={`text-xs ${muted}`}>Safe spend today</p>
                   <p className={`text-sm font-semibold ${fg}`}>
-                    {derived.safeSpendToday === null ? "—" : `₹${formatINR(derived.safeSpendToday)}`}
+                    {derived?.safeSpendToday === null ? "—" : `₹${formatINR(derived?.safeSpendToday || 0)}`}
                   </p>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* View content - now scrollable */}
+          {/* View content */}
           <div className="flex-1 overflow-y-auto overflow-x-hidden">
             {currentView === "dashboard" ? (
               <DashboardView
@@ -1588,21 +1967,96 @@ export default function Home() {
                 fg={fg}
                 muted={muted}
               />
+            ) : currentView === "transactions" ? (
+              <TransactionsView
+                logs={logs}
+                onAddLog={addLog}
+                onDeleteLog={deleteLog}
+                border={border}
+                cardBg={cardBg}
+                shellBg={shellBg}
+                fg={fg}
+                muted={muted}
+                inputBase={inputBase}
+                buttonPrimary={buttonPrimary}
+                buttonDanger={buttonDanger}
+              />
+            ) : currentView === "recurring" ? (
+              <RecurringView
+                rules={recurring}
+                onAddRule={addRecurringRule}
+                onDeleteRule={deleteRecurringRule}
+                onRunDue={runDueRecurring}
+                border={border}
+                cardBg={cardBg}
+                shellBg={shellBg}
+                fg={fg}
+                muted={muted}
+                inputBase={inputBase}
+                buttonPrimary={buttonPrimary}
+                buttonDanger={buttonDanger}
+              />
+            ) : currentView === "goals" ? (
+              <GoalsView
+                goals={goals}
+                onAddGoal={addGoal}
+                onDeleteGoal={deleteGoal}
+                onAddContribution={addContribution}
+                border={border}
+                cardBg={cardBg}
+                shellBg={shellBg}
+                fg={fg}
+                muted={muted}
+                inputBase={inputBase}
+                buttonPrimary={buttonPrimary}
+                buttonDanger={buttonDanger}
+              />
+            ) : currentView === "reports" ? (
+              <ReportsView
+                logs={logs}
+                border={border}
+                cardBg={cardBg}
+                shellBg={shellBg}
+                fg={fg}
+                muted={muted}
+                inputBase={inputBase}
+                buttonPrimary={buttonPrimary}
+              />
+            ) : currentView === "insights" ? (
+              <InsightsView
+                logs={logs}
+                border={border}
+                cardBg={cardBg}
+                shellBg={shellBg}
+                fg={fg}
+                muted={muted}
+              />
+            ) : currentView === "notifications" ? (
+              <NotificationsView
+                notifications={notifications}
+                onDeleteNotif={deleteNotification}
+                onMarkRead={markNotificationRead}
+                border={border}
+                cardBg={cardBg}
+                shellBg={shellBg}
+                fg={fg}
+                muted={muted}
+              />
             ) : currentView === "financegpt" ? (
-              <FinanceGPT />
+              <FinanceGPT
+                userData={userData}
+                derived={derived}
+                logs={logs}
+                budgets={budgets}
+                inputBase={inputBase}
+                border={border}
+                cardBg={cardBg}
+                shellBg={shellBg}
+                fg={fg}
+                muted={muted}
+              />
             ) : currentView === "settings" ? (
-              <div className={`max-w-3xl`}>
-                <Settings userData={userData} onUpdate={refreshData} />
-              </div>
-            ) : currentView === "reports" || currentView === "goals" || currentView === "insights" || currentView === "recurring" || currentView === "notifications" ? (
-              <div className="p-6 flex items-center justify-center h-full">
-                <div className={`w-full max-w-xl rounded-lg border ${border} ${cardBg} p-6 text-center`}>
-                  <p className={`text-sm font-semibold ${fg}`}>Coming Soon</p>
-                  <p className={`text-sm ${muted} mt-2 leading-relaxed`}>
-                    This feature is under development. We're working hard to bring it to you soon! 🚀
-                  </p>
-                </div>
-              </div>
+              <Settings userData={userData} onUpdate={refreshData} />
             ) : null}
           </div>
         </main>
