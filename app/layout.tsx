@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { FirebaseAuthProvider } from "./components/FirebaseAuthProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Wise",
+  title: "Wise - Smart Finance Dashboard",
   description: "A micro-decision finance dashboard. Make better spending decisions in the moment.",
 };
 
@@ -27,7 +28,9 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <FirebaseAuthProvider>
+          {children}
+        </FirebaseAuthProvider>
       </body>
     </html>
   );

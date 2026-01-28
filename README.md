@@ -4,13 +4,24 @@
 
 Wise is a real-time, decision-first personal finance dashboard that helps users answer one question **in the moment**:
 
-> *“Can I spend this money right now?”*
+> *"Can I spend this money right now?"*
 
 No spreadsheets.
 No rigid budgets.
 No bank integrations.
 
 Just clarity.
+
+---
+
+## 🎯 What's New (v2.0)
+
+✨ **Full Authentication** with Clerk (Email + Google OAuth)
+✨ **Persistent Database** with Firebase Firestore
+✨ **Per-User Data Isolation** with security rules
+✨ **Beautiful Landing Page** matching dashboard theme
+✨ **Guided Onboarding** for new users
+✨ **Production-Ready** architecture
 
 ---
 
@@ -34,7 +45,7 @@ Instead of asking users to **plan harder**, it helps them **decide smarter**—r
 * **Real-time math** → Everything updates instantly
 * **Emotion-aware finance** → Reduce anxiety, not just numbers
 * **Zero integrations** → No bank APIs, no legal complexity
-* **Local-first** → Your data stays in your browser
+* **Secure & Private** → Per-user data isolation with Firestore
 
 ---
 
@@ -64,7 +75,7 @@ Get an immediate verdict:
 * ⚠️ Risky — tomorrow’s allowance shrinks
 * ❌ Not advised — goal impact detected
 
-The log is saved and all metrics update instantly.
+The log is saved to Firestore and all metrics update instantly.
 
 ---
 
@@ -96,7 +107,7 @@ Ask things like:
 * “Why am I overspending on food?”
 * “How do I fix my projected overshoot?”
 
-No fake advice. No hallucinated numbers.
+Chat history is persisted to Firestore per user.
 
 ---
 
@@ -127,99 +138,238 @@ Everything is derived from actual logs.
 
 ---
 
-### 🔔 Notifications (Local)
+### 🔔 Notifications
 
 * Budget threshold alerts
 * Daily overspend warnings
 * Weekly summary nudges
 
-No push services. No tracking.
+Stored per-user in Firestore.
 
 ---
 
 ## 🛠️ Tech Stack
 
-* **Framework**: Next.js 14 (App Router)
+### Frontend
+* **Framework**: Next.js 16 (App Router)
 * **Language**: TypeScript
-* **Styling**: Tailwind CSS (ChatGPT-style dark UI)
+* **Styling**: Tailwind CSS 4 (Dark UI)
 * **Animations**: Framer Motion
 * **Charts**: Chart.js
-* **AI**: Google Gemini API
-* **State/Data**: localStorage (local-first)
+* **Icons**: React Icons
 * **Notifications**: react-hot-toast
-* **Deployment**: Vercel
+
+### Backend & Services
+* **Authentication**: Clerk (Email/Password + Google OAuth)
+* **Database**: Firebase Firestore
+* **AI**: Google Gemini 2.5 Flash
+* **Deployment**: Vercel (recommended)
+
+### Security
+* **Per-user data isolation** via Firestore security rules
+* **Clerk middleware** for route protection
+* **Environment variables** for API keys
+* **No third-party trackers**
 
 ---
 
-## 🔐 Privacy by Design
+## 🔐 Privacy & Security
 
-* No bank connections
-* No third-party trackers
-* No backend database (for now)
-* AI only receives **sanitized, opt-in context**
-* All data lives in your browser
+* ✅ Secure authentication with Clerk
+* ✅ Per-user data isolation (Firestore rules)
+* ✅ No bank connections
+* ✅ No third-party trackers
+* ✅ AI receives **sanitized, opt-in context**
+* ✅ All data encrypted in transit and at rest
 
 ---
 
 ## 📦 Getting Started
 
+### Prerequisites
+* Node.js 18+ installed
+* Firebase project created
+* Clerk account created
+
+### Quick Setup
+
+1.  **Clone the repository**
 ```bash
-git clone https://github.com/your-username/Wise
-cd Wise
+git clone https://github.com/your-username/wise-app
+cd wise-app
 npm install
 ```
 
-Create a `.env.local`:
+2.  **Set up environment variables**
 
+Create `.env.local` with:
 ```env
-GEMINI_API_KEY=your_gemini_api_key_here
+# Gemini API
+GEMINI_API_KEY=your_gemini_api_key
+
+# Clerk
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
+CLERK_SECRET_KEY=your_clerk_secret_key
+
+# Firebase Client
+NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+# ... (see SETUP_GUIDE.md for full list)
+
+# Firebase Admin
+FIREBASE_ADMIN_PROJECT_ID=your_project_id
+FIREBASE_ADMIN_CLIENT_EMAIL=your_service_account_email
+FIREBASE_ADMIN_PRIVATE_KEY="your_private_key"
 ```
 
-Run locally:
+3.  **Deploy Firestore security rules**
+```bash
+firebase deploy --only firestore:rules
+```
 
+4.  **Run development server**
 ```bash
 npm run dev
 ```
 
+5.  **Open http://localhost:3000**
+
+### Detailed Setup
+
+See **[SETUP_GUIDE.md](./SETUP_GUIDE.md)** for complete instructions including:
+- Firebase project setup
+- Clerk configuration
+- Firestore rules deployment
+- Environment variables
+- Troubleshooting
+
 ---
 
-## 🧪 Data Storage Keys
+## 📚 Documentation
 
-All data is stored locally using these keys:
+*   **[QUICK_START.md](./QUICK_START.md)** - Quick reference for immediate next steps
+*   **[SETUP_GUIDE.md](./SETUP_GUIDE.md)** - Complete setup instructions
+*   **[DASHBOARD_MIGRATION.md](./DASHBOARD_MIGRATION.md)** - Migrate dashboard to Firestore
+*   **[IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md)** - What was implemented
+*   **[ARCHITECTURE.md](./ARCHITECTURE.md)** - System architecture and data flows
 
-* `wise_user_data`
-* `wise_spend_logs`
-* `wise_category_budgets`
-* `wise_recurring_rules`
-* `wise_goals`
-* `wise_financegpt_chat`
+---
+
+## 🗄️ Data Structure
+
+All user data is stored in Firestore:
+
+```
+/users/{userId}/
+  ├─ profile/main              # User settings (income, expenses, goals)
+  ├─ logs/{logId}              # Spend logs
+  ├─ budgets/main              # Category budgets
+  ├─ goals/{goalId}            # Savings goals
+  ├─ recurring/{ruleId}        # Recurring transaction rules
+  ├─ notifications/{notifId}   # User notifications
+  └─ chat/{messageId}          # FinanceGPT chat history
+```
+
+Security rules ensure each user can only access their own data.
+
+---
+
+## 🚀 Deployment
+
+### Vercel (Recommended)
+
+```bash
+# Install Vercel CLI
+npm install -g vercel
+
+# Deploy
+vercel
+
+# Add environment variables in Vercel Dashboard
+# Settings → Environment Variables
+```
+
+### Other Platforms
+
+Works on any platform supporting Next.js:
+- Netlify
+- Railway
+- Render
+- AWS Amplify
 
 ---
 
 ## 🏆 Perfect For
 
-* Hackathons
-* Students & early professionals
-* Personal finance experiments
-* AI + UX case studies
-* Fintech MVPs without compliance pain
+*   Production personal finance apps
+*   Hackathons
+*   Students & early professionals
+*   Personal finance experiments
+*   AI + UX case studies
+*   Fintech MVPs without compliance pain
 
 ---
 
-## 🧩 Roadmap (Optional)
+## 🧩 Roadmap
 
-* WhatsApp daily safe spend
-* Family/shared budgets
-* Cloud sync (opt-in)
-* UPI / bank integrations
-* Public read-only financial summaries
+### Completed ✅
+- [x] Clerk authentication
+- [x] Firebase Firestore integration
+- [x] Per-user data isolation
+- [x] Landing page
+- [x] Onboarding wizard
+- [x] FinanceGPT chat persistence
+
+### In Progress 🔄
+- [ ] Dashboard migration to Firestore
+- [ ] Component updates
+
+### Future 🚀
+- [ ] Data export/import
+- [ ] React Query for caching
+- [ ] Optimistic UI updates
+- [ ] Offline support
+- [ ] Firebase Analytics
+- [ ] WhatsApp daily safe spend
+- [ ] Family/shared budgets
+- [ ] UPI / bank integrations (optional)
 
 ---
 
-## 💬 Philosophy
+## 🤝 Contributing
 
-> *We’re not teaching finance.*
-> *We’re reducing money anxiety.*
+Contributions are welcome! Please:
 
-If Wise helps someone pause before a bad spend,
-it’s already doing its job.
+1.  Fork the repository
+2.  Create a feature branch
+3.  Make your changes
+4.  Submit a pull request
+
+---
+
+## 📄 License
+
+MIT License - feel free to use this for personal or commercial projects.
+
+---
+
+## 🙏 Acknowledgments
+
+*   **Clerk** for authentication
+*   **Firebase** for database
+*   **Google Gemini** for AI
+*   **Vercel** for hosting
+*   **Next.js** for the framework
+
+---
+
+## 📞 Support
+
+For issues or questions:
+- Check the documentation in the repo
+- Open an issue on GitHub
+- Review SETUP_GUIDE.md for troubleshooting
+
+---
+
+**Built with ❤️ for better financial decisions**

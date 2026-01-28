@@ -3,11 +3,15 @@
 import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/app/components/FirebaseAuthProvider";
+import { setUserProfile } from "@/lib/firebase/firestore";
+import { toast, Toaster } from "react-hot-toast";
 
 type PayCycle = "monthly" | "weekly" | "biweekly";
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
 
@@ -39,26 +43,53 @@ export default function OnboardingPage() {
   };
 
   const handleComplete = async () => {
+    if (!user) {
+      toast.error("You must be signed in to complete onboarding");
+      return;
+    }
+
     setLoading(true);
-    // Simulate saving data (in real app, save to DB)
-    await new Promise((resolve) => setTimeout(resolve, 800));
     
-    // Store in localStorage for now
-    const userData = {
-      income: Number(income),
-      fixedExpenses: Number(fixedExpenses),
-      savingsGoal: Number(savingsGoal) || 0,
-      payCycle,
-      spendingHabits,
-      financialGoals,
-      emergencyFund: Number(emergencyFund) || 0,
-      monthlySubscriptions: Number(monthlySubscriptions) || 0,
-      onboarded: true,
-    };
-    localStorage.setItem("wise_user_data", JSON.stringify(userData));
-    
-    router.push("/");
+    try {
+      // Save to Firestore via Client SDK
+      await setUserProfile(user.uid, {
+        income: Number(income),
+        fixedExpenses: Number(fixedExpenses),
+        savingsGoal: Number(savingsGoal) || 0,
+        monthlySubscriptions: Number(monthlySubscriptions) || 0,
+        onboardingCompleted: true,
+        // @ts-ignore - adding missing fields for profile
+        payCycle,
+        spendingHabits,
+        financialGoals,
+        emergencyFund: Number(emergencyFund) || 0,
+      });
+      
+      toast.success("Setup complete! Redirecting to dashboard...");
+      setTimeout(() => {
+        router.push("/dashboard");
+      }, 1000);
+    } catch (error) {
+      console.error("Error saving profile:", error);
+      toast.error("Failed to save profile. Please try again.");
+      setLoading(false);
+    }
   };
+
+  // Show loading state while Auth loads
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[rgb(var(--background))] flex items-center justify-center">
+        <div className="text-[rgb(var(--foreground))] text-lg animate-pulse font-medium">Loading...</div>
+      </div>
+    );
+  }
+
+  // Redirect if not signed in
+  if (!user) {
+    router.push("/");
+    return null;
+  }
 
   const shellBg = "bg-[rgb(var(--background))]";
   const cardBg = "bg-[rgb(var(--card))]";
@@ -411,6 +442,7 @@ export default function OnboardingPage() {
           </div>
         )}
       </div>
+      <Toaster position="top-right" />
     </div>
   );
 }
