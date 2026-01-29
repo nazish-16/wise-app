@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable react/no-unescaped-entities */
 "use client";
 
 import { useState, useEffect, useRef } from "react";
@@ -102,11 +104,11 @@ const InteractiveGridBackground = () => {
 
 const EnhancedDashboardMockup = ({ user }: { user: any }) => {
   return (
-   <div className="relative w-full aspect-[16/9] md:aspect-[21/9] bg-[#0A0A0A] rounded-xl border border-white/10 shadow-2xl overflow-hidden flex text-[10px] md:text-xs">
+   <div className="relative w-full aspect-video md:aspect-21/9 bg-[#0A0A0A] rounded-xl border border-white/10 shadow-2xl overflow-hidden flex text-[10px] md:text-xs">
       {/* Sidebar */}
-      <div className="w-48 bg-[#0F0F0F] border-r border-white/5 flex flex-col p-4 hidden md:flex">
-         <div className="flex items-center gap-2 mb-8">
-            <div className="w-6 h-6 rounded bg-white/10" />
+      <div className="w-48 bg-[#0F0F0F] border-r border-white/5 flex flex-col p-4 md:flex">
+         <div className="flex items-center gap-1 mb-8">
+            <Image src={`/assets/logo.png`} className="h-6 w-6" alt="logo" width={2000000} height={2000000}/>
             <span className="font-bold text-white tracking-widest uppercase text-[10px]">Wise</span>
          </div>
          
@@ -256,7 +258,7 @@ const FloatingNavbar = ({ user, signInWithGoogle, logout }: any) => {
       initial={{ y: -100, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ${
-        isScrolled ? "w-[90%] md:w-[600px]" : "w-[95%] md:w-[800px]"
+        isScrolled ? "w-[90%] md:w-150" : "w-[95%] md:w-200"
       }`}
     >
       <div className={`
@@ -264,11 +266,11 @@ const FloatingNavbar = ({ user, signInWithGoogle, logout }: any) => {
         flex items-center justify-between
         bg-black/50 shadow-[0_8px_32px_rgba(0,0,0,0.5)]
       `}>
-        <Link href="/" className="flex items-center gap-3">
-          <div className="relative w-6 h-6">
+        <Link href="/" className="flex items-center gap-1">
+          <div className="relative w-8 h-8">
             <Image src="/assets/logo.png" alt="Wise" fill className="object-contain" />
           </div>
-          <span className="font-semibold text-sm tracking-wide text-white/90">Wise</span>
+          <span className="font-semibold text-md tracking-wide text-white/90">Wise</span>
         </Link>
 
         <div className="hidden md:flex items-center gap-6 text-[13px] font-medium text-white/60">
@@ -280,7 +282,7 @@ const FloatingNavbar = ({ user, signInWithGoogle, logout }: any) => {
           {user ? (
             <motion.button 
               onClick={() => window.location.href = '/dashboard'}
-              className="px-4 py-1.5 bg-white text-black text-xs font-bold rounded-full shadow-lg shadow-white/10"
+              className="px-4 py-1.5 bg-white text-black hover:translate-x-0.5 transition-transform text-xs font-bold rounded-full shadow-lg shadow-white/10"
             >
               Dashboard
             </motion.button>
@@ -399,7 +401,7 @@ const FixedFinanceGPT = ({ isLoggedIn }: { isLoggedIn: boolean }) => {
            >
               <div className="p-4 border-b border-white/10 flex justify-between items-center bg-white/5">
                  <div className="flex items-center gap-2">
-                    <MdAutoAwesome className="text-yellow-400" />
+                    <MdAutoAwesome className="text-white" />
                     <span className="font-bold text-sm">Wise AI</span>
                     <span className="text-[10px] bg-emerald-500/20 text-emerald-500 px-2 py-0.5 rounded-full">Product Guide</span>
                  </div>
@@ -459,13 +461,13 @@ const FixedFinanceGPT = ({ isLoggedIn }: { isLoggedIn: boolean }) => {
             onSubmit={handleSubmit}
             className={`
                relative flex items-center gap-2 
-               bg-black/80 backdrop-blur-xl border border-white/20 
-               rounded-full p-2 pl-5 shadow-2xl shadow-purple-500/10
+               bg-black/80 backdrop-blur-xl border border-white/40 
+               rounded-full p-1 pl-5 shadow-2xl shadow-purple-500/10
                transition-all duration-300
-               ${isOpen ? 'ring-1 ring-white/20' : 'hover:border-white/40'}
+               ${isOpen ? 'ring-1 ring-white/20' : 'hover:border-white/60'}
             `}
           >
-             <MdAutoAwesome className={`text-yellow-400 text-xl transition-all ${isOpen ? 'opacity-100' : 'opacity-70'}`} />
+             <MdAutoAwesome className={`text-white text-xl transition-all ${isOpen ? 'opacity-100' : 'opacity-70'}`} />
              <input 
                ref={inputRef}
                value={input}
@@ -475,7 +477,7 @@ const FixedFinanceGPT = ({ isLoggedIn }: { isLoggedIn: boolean }) => {
              />
              <button 
                type="submit"
-               className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center hover:bg-white/90 transition-colors"
+               className="w-9 h-9 rounded-full bg-white text-black flex items-center justify-center hover:bg-white/90 transition-colors"
              >
                 <MdArrowForward size={20} />
              </button>
@@ -492,7 +494,7 @@ const ReviewCard = ({ name, role, text, rating }: any) => (
     </div>
     <p className="text-white/70 text-sm leading-relaxed">"{text}"</p>
     <div className="flex items-center gap-3 mt-auto pt-4 border-t border-white/5">
-       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-xs font-bold">
+       <div className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center text-xs font-bold">
           {name[0]}
        </div>
        <div>
@@ -596,9 +598,9 @@ export default function LandingPage() {
           transition={{ duration: 0.8, ease: "easeOut" }}
           className="text-center relative z-10 max-w-4xl mx-auto"
         >
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-white/5 backdrop-blur-md text-[10px] md:text-xs font-medium text-white/70 mb-8 uppercase tracking-widest shadow-lg">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-white/5 backdrop-blur-md text-[10px] md:text-xs font-medium text-white/70 mb-8 uppercase tracking-wide shadow-lg">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            V 2.0 Now Available
+            WISE 2.0 Now Available
           </div>
           
           <h1 className="text-4xl sm:text-6xl md:text-7xl font-bold tracking-tighter mb-6 leading-[1.1] text-transparent bg-clip-text bg-gradient-to-b from-white via-white to-white/40">
@@ -606,18 +608,17 @@ export default function LandingPage() {
             with precise insights.
           </h1>
           
-          <p className="text-sm md:text-lg text-white/50 max-w-xl mx-auto mb-10 leading-relaxed">
+          <p className="text-sm md:text-md text-white/50 max-w-xl mx-auto mb-10 leading-relaxed">
             The minimal finance dashboard designed for the modern era. 
             Real-time tracking, AI-powered predictions, and bank-grade security.
           </p>
 
           <div className="flex items-center justify-center gap-4">
              <motion.button
-               onClick={signInWithGoogle}
-               className="group relative px-8 py-3 bg-white text-black rounded-full font-semibold text-sm overflow-hidden shadow-[0_0_20px_rgba(255,255,255,0.2)]"
+               className="group relative px-8 py-3 bg-white hover:bg-white/80 transition text-black rounded-full font-semibold text-sm overflow-hidden shadow-[0_0_20px_rgba(255,255,255,0.2)]"
              >
                <span className="relative z-10 flex items-center gap-2">
-                 Get Started <MdArrowForward />
+                 Explore <MdArrowForward />
                </span>
              </motion.button>
           </div>
@@ -697,9 +698,9 @@ export default function LandingPage() {
       <DynamicReviews /> 
 
       {/* Footer */}
-      <footer className="py-6 border-t border-white/5 text-center relative z-10 bg-black">
+      <footer className="py-5 border-t border-white/5 text-center relative z-10 bg-black">
         <div className="flex flex-col items-center gap-5">
-          <p className="text-white/20 text-xs">
+          <p className="text-white/50 text-xs">
             Copyright Claim © 2026 Wise Application.
           </p>
         </div>
