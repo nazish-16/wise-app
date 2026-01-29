@@ -14,16 +14,29 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase (singleton pattern)
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+// We only initialize if the apiKey is present to avoid crashing during build/SSR
+const app = getApps().length === 0
+    ? (firebaseConfig.apiKey ? initializeApp(firebaseConfig) : null)
+    : getApp();
 
 // Initialize Firestore
-export const db = getFirestore(app);
+// If app is null (during build without env vars), we export a mock or null
+export const db = app ? getFirestore(app) : null as unknown as any;
 
 // Initialize Auth
-export const auth = getAuth(app);
+// Defensive initialization for Auth to prevent "invalid-api-key" errors during build
+export const auth = (() => {
+    if (!app) return null as unknown as any;
+    try {
+        return getAuth(app);
+    } catch (error) {
+        console.warn("Firebase Auth failed to initialize:", error);
+        return null as unknown as any;
+    }
+})();
 
 // Initialize Analytics (only in browser)
-export const analytics = typeof window !== "undefined"
+export const analytics = typeof window !== "undefined" && app
     ? isSupported().then(yes => yes ? getAnalytics(app) : null)
     : Promise.resolve(null);
 

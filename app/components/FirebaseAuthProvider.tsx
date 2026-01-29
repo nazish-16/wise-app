@@ -9,6 +9,7 @@ import {
   signOut as firebaseSignOut 
 } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
+import { toast } from "react-hot-toast";
 
 interface AuthContextType {
   user: User | null;
@@ -31,6 +32,11 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!auth) {
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
       setLoading(false);
@@ -40,6 +46,10 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const signInWithGoogle = async () => {
+    if (!auth) {
+      toast.error("Authentication is not properly configured");
+      return;
+    }
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
@@ -49,6 +59,7 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
   };
 
   const logout = async () => {
+    if (!auth) return;
     try {
       await firebaseSignOut(auth);
     } catch (error) {
