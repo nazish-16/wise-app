@@ -104,137 +104,133 @@ const InteractiveGridBackground = () => {
 
 const EnhancedDashboardMockup = ({ user }: { user: any }) => {
   return (
-   <div className="relative w-full aspect-video md:aspect-21/9 bg-[#0A0A0A] rounded-xl border border-white/10 shadow-2xl overflow-hidden flex text-[10px] md:text-xs">
-      {/* Sidebar */}
-      <div className="w-48 bg-[#0F0F0F] border-r border-white/5 flex flex-col p-4 md:flex">
-         <div className="flex items-center gap-1 mb-8">
-            <Image src={`/assets/logo.png`} className="h-6 w-6" alt="logo" width={2000000} height={2000000}/>
+   <div className="relative w-full min-h-[500px] md:min-h-0 md:aspect-21/9 bg-[#0A0A0A] rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col md:flex-row text-[10px] md:text-xs">
+      {/* Sidebar - Desktop Only */}
+      <div className="hidden md:flex w-48 bg-[#0F0F0F] border-r border-white/5 flex-col p-4 shrink-0">
+         <div className="flex items-center gap-2 mb-8">
+            <div className="relative w-5 h-5">
+               <Image src="/assets/logo.png" alt="logo" fill className="object-contain"/>
+            </div>
             <span className="font-bold text-white tracking-widest uppercase text-[10px]">Wise</span>
          </div>
          
          <div className="space-y-1">
             <div className="text-white/30 text-[9px] uppercase tracking-wider mb-2 pl-2">Main</div>
             <div className="flex items-center gap-3 px-3 py-2 bg-white/5 text-white rounded-lg font-medium">
-               <MdDashboard /> Dashboard
+               <MdDashboard size={14} /> Dashboard
             </div>
-            <div className="flex items-center gap-3 px-3 py-2 text-white/50 hover:text-white hover:bg-white/5 rounded-lg transition-colors">
-               <MdWallet /> Transactions
+            <div className="flex items-center gap-3 px-3 py-2 text-white/50 hover:text-white rounded-lg transition-colors">
+               <MdWallet size={14} /> Transactions
             </div>
-            <div className="flex items-center gap-3 px-3 py-2 text-white/50 hover:text-white hover:bg-white/5 rounded-lg transition-colors">
-               <MdPieChart /> Recurring
-            </div>
-            <div className="flex items-center gap-3 px-3 py-2 text-white/50 hover:text-white hover:bg-white/5 rounded-lg transition-colors">
-               <MdTrendingUp /> Goals
-            </div>
-            <div className="flex items-center gap-3 px-3 py-2 text-white/50 hover:text-white hover:bg-white/5 rounded-lg transition-colors">
-               <MdAutoAwesome /> FinanceGPT
-            </div>
-         </div>
-         
-         <div className="mt-auto pt-4 border-t border-white/5">
-            <div className="flex items-center gap-3 px-3 py-2 text-white/50 hover:text-white hover:bg-white/5 rounded-lg transition-colors">
-               <MdSettings /> Settings
+            <div className="flex items-center gap-3 px-3 py-2 text-white/50 hover:text-white rounded-lg transition-colors">
+               <MdAutoAwesome size={14} /> FinanceGPT
             </div>
          </div>
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 bg-[#0A0A0A]">
-         {/* Header */}
-         <div className="h-14 border-b border-white/5 flex items-center justify-between px-6">
-            <div>
-               <h3 className="text-white font-medium">Dashboard</h3>
-               <p className="text-white/30 text-[10px]">Thursday, Jan 29, 2026</p>
+      <div className="flex-1 flex flex-col min-w-0 bg-[#0A0A0A] overflow-hidden">
+         {/* Top Header */}
+         <div className="h-14 md:h-16 border-b border-white/5 flex items-center justify-between px-4 md:px-6 shrink-0 bg-[#0D0D0D]">
+            <div className="flex items-center gap-3">
+               <div className="md:hidden relative w-5 h-5">
+                  <Image src="/assets/logo.png" alt="logo" fill className="object-contain"/>
+               </div>
+               <div>
+                  <h3 className="text-white font-medium text-xs md:text-sm">Overview</h3>
+                  <p className="text-white/30 text-[8px] md:text-[10px] hidden sm:block">Thursday, Jan 29, 2026</p>
+               </div>
             </div>
-            <div className="flex items-center gap-4">
-               <div className="text-right hidden sm:block">
-                  <div className="text-[10px] text-white/40 uppercase tracking-wider">Safe spend today</div>
-                  <div className="text-sm font-bold text-white">₹27,666</div>
+            <div className="flex items-center gap-3">
+               <div className="text-right">
+                  <div className="text-[7px] md:text-[9px] text-white/40 uppercase tracking-wider">Safe Spend</div>
+                  <div className="text-[11px] md:text-sm font-bold text-emerald-400">₹27,666</div>
                </div>
                {user?.photoURL ? (
-                  <div className="relative w-8 h-8 rounded-full overflow-hidden border border-white/10">
+                  <div className="relative w-7 h-7 md:w-8 md:h-8 rounded-full overflow-hidden border border-white/10">
                     <Image src={user.photoURL} alt="User" fill className="object-cover" />
                   </div>
                ) : (
-                  <div className="w-8 h-8 rounded-full bg-white/10 border border-white/10" />
+                  <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-white/10 border border-white/10" />
                )}
             </div>
          </div>
 
          {/* Dashboard Content */}
-         <div className="p-6 overflow-hidden flex flex-col gap-4">
-            {/* Top Cards Row */}
-            <div className="grid grid-cols-3 gap-4">
-               {/* Monthly Income Card */}
-               <div className="bg-[#111] border border-white/5 rounded-lg p-4 flex flex-col justify-between">
-                  <span className="text-white/40 text-[10px]">Monthly Income</span>
-                  <div className="text-lg font-bold text-white mt-1">₹1,75,000</div>
-                  <div className="text-[9px] text-white/30 mt-2 truncate">Fixed+Subs: ₹62,000 • Savings goal: ₹30,000</div>
+         <div className="flex-1 p-4 md:p-6 overflow-y-auto custom-scrollbar">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 mb-4">
+               {/* Income Card */}
+               <div className="bg-[#141414] border border-white/5 rounded-xl p-4">
+                  <p className="text-white/40 text-[9px] md:text-[10px] uppercase tracking-tight">Monthly Income</p>
+                  <p className="text-lg md:text-2xl font-bold text-white mt-1">₹1,75,000</p>
+                  <div className="flex gap-2 mt-2 opacity-30">
+                     <div className="h-1 w-10 bg-white rounded-full" />
+                     <div className="h-1 w-6 bg-white rounded-full" />
+                  </div>
                </div>
                
                {/* Spendable Card */}
-               <div className="bg-[#111] border border-white/5 rounded-lg p-4 flex flex-col justify-between">
-                  <span className="text-white/40 text-[10px]">Spendable This Month</span>
-                  <div className="text-lg font-bold text-white mt-1">₹83,000</div>
-                  <div className="text-[9px] text-white/30 mt-2 truncate">Spent: ₹0 • Remaining: ₹83,000</div>
+               <div className="bg-[#141414] border border-white/5 rounded-xl p-4">
+                  <p className="text-white/40 text-[9px] md:text-[10px] uppercase tracking-tight">Spendable Left</p>
+                  <p className="text-lg md:text-2xl font-bold text-white mt-1">₹83,000</p>
+                  <div className="w-full bg-white/5 h-1 rounded-full mt-3">
+                     <div className="w-1/3 h-full bg-white/20 rounded-full" />
+                  </div>
                </div>
 
                {/* Safe Spend Card */}
-               <div className="bg-[#111] border border-white/5 rounded-lg p-4 flex flex-col justify-between relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-500/5 rounded-bl-full -mr-4 -mt-4" />
-                  <span className="text-white/40 text-[10px]">Safe Spend Today</span>
-                  <div className="text-lg font-bold text-white mt-1">₹27,666</div>
-                  <div className="w-full bg-white/5 h-1 rounded-full mt-3 overflow-hidden">
-                     <div className="w-[94%] h-full bg-emerald-500" />
+               <div className="bg-[#141414] border border-white/5 rounded-xl p-4 relative overflow-hidden sm:col-span-2 lg:col-span-1">
+                  <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/10 blur-2xl -mr-10 -mt-10" />
+                  <p className="text-white/40 text-[9px] md:text-[10px] uppercase tracking-tight">Safe Today</p>
+                  <p className="text-lg md:text-2xl font-bold text-emerald-400 mt-1">₹27,666</p>
+                  <div className="w-full bg-emerald-500/10 h-1.5 rounded-full mt-3 overflow-hidden">
+                     <motion.div 
+                        initial={{ width: 0 }}
+                        whileInView={{ width: "94%" }}
+                        transition={{ duration: 1, delay: 0.5 }}
+                        className="h-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" 
+                     />
                   </div>
                </div>
             </div>
 
-            {/* Middle Row */}
-            <div className="grid grid-cols-2 gap-4 flex-1 min-h-0">
-               {/* Projection */}
-               <div className="bg-[#111] border border-white/5 rounded-lg p-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-4">
+               {/* Projection - Interactive Look */}
+               <div className="bg-[#141414] border border-white/5 rounded-xl p-4">
                   <div className="flex justify-between items-center mb-4">
-                     <span className="text-white/40 text-[10px]">Projection (at current pace)</span>
-                     <span className="text-emerald-500 text-[10px]">+0%</span>
+                     <span className="text-white/40 text-[9px] md:text-[10px] uppercase tracking-tight">AI Projection</span>
+                     <span className="text-emerald-500 text-[9px] font-bold px-1.5 py-0.5 bg-emerald-500/10 rounded">ON TRACK</span>
                   </div>
-                  <div className="space-y-3">
-                     <div>
-                        <div className="text-[10px] text-white/50">Spend: ₹0</div>
-                        <div className="w-full bg-white/5 h-1.5 rounded-full mt-1"></div>
-                     </div>
-                     <div>
-                        <div className="text-[10px] text-emerald-500">Projected leftover: ₹83,000</div>
-                        <div className="w-full bg-white/5 h-1.5 rounded-full mt-1 overflow-hidden">
-                           <div className="w-full h-full bg-emerald-500/50" />
+                  <div className="space-y-4">
+                     <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-white/40"><MdTrendingUp size={16}/></div>
+                        <div className="flex-1">
+                           <div className="flex justify-between text-[10px] mb-1">
+                              <span className="text-white/60">Spending Pace</span>
+                              <span className="text-white">Low</span>
+                           </div>
+                           <div className="w-full bg-white/5 h-1 rounded-full overflow-hidden">
+                              <div className="w-1/4 h-full bg-white/40" />
+                           </div>
                         </div>
                      </div>
+                     <p className="text-[10px] md:text-xs text-white/50 leading-relaxed italic border-l-2 border-emerald-500/50 pl-3 py-1">
+                        "Your current spending pace suggests a ₹12,450 surplus by month end."
+                     </p>
                   </div>
                </div>
 
-               {/* Budget Insight */}
-               <div className="bg-[#111] border border-white/5 rounded-lg p-4 relative">
-                   <span className="text-white/40 text-[10px]">Budget Insight</span>
-                   <div className="font-bold text-white mt-1">Expected vs Actual</div>
-                   <p className="text-[10px] text-emerald-400 mt-2">You're under the expected spend by ₹77,645.</p>
-                   
-                   <div className="mt-4 p-2 bg-white/5 rounded border border-white/5 flex justify-between items-center">
-                      <div>
-                         <div className="text-[9px] text-white/40">Safe spend for rest of week</div>
-                         <div className="font-bold text-white">₹20,750</div>
-                      </div>
-                      <div className="text-[9px] text-white/30">Days left: 4</div>
-                   </div>
-               </div>
-            </div>
-
-            {/* Bottom Row - Quick Add */}
-            <div className="bg-[#111] border border-white/5 rounded-lg p-4 h-24 flex flex-col justify-center gap-3">
-               <div className="text-white/40 text-[10px]">Real-time Spend Check</div>
-               <div className="flex gap-2">
-                  {[50, 100, 200, 500, 1000].map(amt => (
-                     <div key={amt} className="px-3 py-1 rounded border border-white/10 text-white/50 text-[10px] bg-white/5">₹{amt}</div>
-                  ))}
+               {/* Quick Actions - Simplified for Mobile */}
+               <div className="bg-[#141414] border border-white/5 rounded-xl p-4 flex flex-col justify-between min-h-[120px]">
+                  <p className="text-white/40 text-[9px] md:text-[10px] uppercase tracking-tight mb-3">Quick Spend Check</p>
+                  <div className="flex flex-wrap gap-2">
+                     {[100, 500, 1000].map(amt => (
+                        <div key={amt} className="flex-1 min-w-[60px] py-3 rounded-lg border border-white/5 bg-white/5 text-white/80 font-bold text-center text-xs">
+                           ₹{amt}
+                        </div>
+                     ))}
+                  </div>
+                  <p className="text-[8px] text-white/20 mt-3 text-center uppercase tracking-widest">Instant Approval Engine</p>
                </div>
             </div>
          </div>
@@ -591,26 +587,26 @@ export default function LandingPage() {
       </div>
 
       {/* Hero Section */}
-      <section className="relative pt-40 pb-20 md:pt-48 md:pb-32 px-4 flex flex-col items-center justify-center min-h-[90vh] z-10">
+      <section className="relative pt-32 pb-16 md:pt-48 md:pb-32 px-4 flex flex-col items-center justify-center min-h-[85vh] z-10">
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, ease: "easeOut" }}
           className="text-center relative z-10 max-w-4xl mx-auto"
         >
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-white/5 backdrop-blur-md text-[10px] md:text-xs font-medium text-white/70 mb-8 uppercase tracking-wide shadow-lg">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-white/5 backdrop-blur-md text-[9px] md:text-xs font-medium text-white/70 mb-6 md:mb-8 uppercase tracking-wide shadow-lg">
+            <span className="w-1 min-w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
             WISE 2.0 Now Available
           </div>
           
-          <h1 className="text-4xl sm:text-6xl md:text-7xl font-bold tracking-tighter mb-6 leading-[1.1] text-transparent bg-clip-text bg-gradient-to-b from-white via-white to-white/40">
-            Control your wealth <br />
+          <h1 className="text-3xl sm:text-5xl md:text-7xl font-bold tracking-tighter mb-4 md:mb-6 leading-tight md:leading-[1.1] text-transparent bg-clip-text bg-gradient-to-b from-white via-white to-white/40">
+            Control your wealth <br className="hidden sm:block" />
             with precise insights.
           </h1>
           
-          <p className="text-sm md:text-md text-white/50 max-w-xl mx-auto mb-10 leading-relaxed">
+          <p className="text-xs md:text-md text-white/50 max-w-[280px] sm:max-w-xl mx-auto mb-8 md:mb-10 leading-relaxed md:leading-relaxed">
             The minimal finance dashboard designed for the modern era. 
-            Real-time tracking, AI-powered predictions, and bank-grade security.
+            Real-time tracking, AI predictions, and bank-grade security.
           </p>
 
           <div className="flex items-center justify-center gap-4">
@@ -629,10 +625,13 @@ export default function LandingPage() {
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1.0, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
-          className="mt-24 w-full max-w-5xl mx-auto relative perspective"
+          className="mt-12 md:mt-24 w-full max-w-5xl mx-auto relative"
+          style={{ perspective: "1000px" }}
         >
             <div className="absolute inset-0 bg-emerald-500/20 blur-[100px] -z-10 rounded-full opacity-50" />
-            <EnhancedDashboardMockup user={user} />
+            <div style={{ transform: "rotateX(5deg) translateY(-2%)" }} className="w-full">
+              <EnhancedDashboardMockup user={user} />
+            </div>
         </motion.div>
       </section>
 
