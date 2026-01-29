@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@clerk/nextjs": "^6.36.10",
+    "@google/generative-ai": "^0.24.1",
     "chart.js": "^4.5.1",
     "clsx": "^2.1.1",
     "dequal": "^2.0.3",
