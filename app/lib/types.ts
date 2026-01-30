@@ -24,6 +24,8 @@ export type UserData = {
   [key: string]: unknown;
 };
 
+export type SpendIntent = "Essential" | "Comfort" | "Impulse";
+
 export type SpendLog = {
   id: string;
   amount: number;
@@ -31,6 +33,7 @@ export type SpendLog = {
   category?: SpendCategory;
   createdAt: string;
   type: TransactionType;
+  intent?: SpendIntent;
 };
 
 export type CategoryBudgets = Record<SpendCategory, number>;
@@ -57,9 +60,24 @@ export type SavingsGoal = {
   createdAt: string;
 };
 
+export type Decision = {
+  id: string;
+  userId: string;
+  timestamp: string;
+  question: string;
+  recommendedAction: "SAFE" | "RISKY" | "NOT ADVISED";
+  amount: number;
+  category?: SpendCategory;
+  context: {
+    safeSpendToday: number;
+    remainingSpendable: number;
+  };
+  outcomeOverspent?: boolean; // filled later
+};
+
 export type Notification = {
   id: string;
-  type: "budget" | "warning" | "reminder" | "insight";
+  type: "budget" | "warning" | "reminder" | "insight" | "fatigue" | "recurring";
   title: string;
   message: string;
   createdAt: string;
@@ -70,4 +88,15 @@ export type NotificationPref = {
   budgetThreshold: number;
   dailySafeSpendWarning: boolean;
   weeklyReminder: boolean;
+  browserNotifications: boolean;
+  fatigueAlerts: boolean;
+  recurringAlerts: boolean;
+  quietHoursStart: string; // "22:00"
+  quietHoursEnd: string; // "08:00"
+};
+
+export type ConfidenceScore = {
+  score: number;
+  reason: string;
+  timestamp: string;
 };

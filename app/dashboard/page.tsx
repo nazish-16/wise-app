@@ -5,7 +5,7 @@ import Image from "next/image";
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { BiMenu } from "react-icons/bi";
-import { MdDashboard, MdTrendingUp, MdSettings, MdAssignment, MdStart, MdLightbulb, MdRepeat, MdNotifications, MdSend, MdRefresh, MdDownload } from "react-icons/md";
+import { MdDashboard, MdTrendingUp, MdSettings, MdAssignment, MdStart, MdLightbulb, MdRepeat, MdNotifications, MdSend, MdRefresh, MdDownload, MdExpandLess } from "react-icons/md";
 import { AnimatePresence, motion } from "framer-motion";
 import { Toaster, toast } from "react-hot-toast";
 import { Bar, Doughnut } from "react-chartjs-2";
@@ -32,7 +32,7 @@ import { useAuth } from "@/app/components/FirebaseAuthProvider";
 import { useUserProfile, useSpendLogs, useCategoryBudgets, useSavingsGoals, useNotifications } from "@/lib/hooks/useFirestore";
 
 // Import types and utils
-import { SpendLog, SpendCategory, Notification, SavingsGoal, RecurringRule, Cadence } from "@/app/lib/types";
+import { SpendLog, SpendCategory, Notification, SavingsGoal, RecurringRule, Cadence, ConfidenceScore } from "@/app/lib/types";
 import {
   formatINR,
   isSameDay,
@@ -45,6 +45,21 @@ import {
   downloadJSON,
 } from "@/app/lib/utils";
 import Link from "next/link";
+
+// Import Insights Engine
+import { 
+  computeConfidenceScore, 
+  detectFatigue, 
+  detectRecurring, 
+  detectThresholdCrossings, 
+  getTimeSensitivity,
+  DashboardContext
+} from "@/lib/insights/engine";
+
+// Import new widgets
+import { ConfidenceWidget } from "@/app/components/ConfidenceWidget";
+import { WhatIfModal } from "@/app/components/WhatIfModal";
+import { NotificationWatcher } from "@/app/components/NotificationWatcher";
 
 // Register Chart.js components
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
@@ -76,382 +91,7 @@ const SESSION_ID_KEY = "wise_session_id";
 
 // ---------- Helper Functions ----------
 
-function FinanceGPTComponent({
-  userData,
-  derived,
-  logs,
-  budgets,
-  inputBase,
-  border,
-  cardBg,
-  shellBg,
-  fg,
-  muted,
-}: {
-  userData: any;
-  derived: any;
-  logs: SpendLog[];
-  budgets: Record<SpendCategory, number>;
-  inputBase: string;
-  border: string;
-  cardBg: string;
-  shellBg: string;
-  fg: string;
-  muted: string;
-}) {
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [inputValue, setInputValue] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [sessionId, setSessionId] = useState<string>("");
-  const [includeNotes, setIncludeNotes] = useState(false);
-  const [includeLast30Days, setIncludeLast30Days] = useState(true);
-  const [includeBudgets, setIncludeBudgets] = useState(true);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Initialize session ID and load chat history
-  useEffect(() => {
-    let id = localStorage.getItem(SESSION_ID_KEY);
-    if (!id) {
-      id = crypto.randomUUID();
-      localStorage.setItem(SESSION_ID_KEY, id);
-    }
-    setSessionId(id);
-
-    const savedChat = safeParseJSON<ChatMessage[]>(localStorage.getItem(FINANCEGPT_CHAT_KEY));
-    if (savedChat) {
-      setChatMessages(savedChat);
-    }
-  }, []);
-
-  // Auto-scroll to bottom
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatMessages]);
-
-  // Persist chat to localStorage
-  useEffect(() => {
-    if (chatMessages.length > 0) {
-      localStorage.setItem(FINANCEGPT_CHAT_KEY, JSON.stringify(chatMessages));
-    }
-  }, [chatMessages]);
-
-  const buildContextData = () => {
-    let logsToUse = logs;
-
-    // Filter to last 30 days if toggled
-    if (includeLast30Days) {
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      logsToUse = logs.filter((l) => new Date(l.createdAt) >= thirtyDaysAgo);
-    }
-
-    const categoryTotals: Record<string, number> = {};
-    CATEGORIES.forEach((c) => (categoryTotals[c] = 0));
-    logsToUse.forEach((l) => {
-      const c = l.category || "Other";
-      categoryTotals[c] = (categoryTotals[c] || 0) + l.amount;
-    });
-
-    const topCategories = Object.entries(categoryTotals)
-      .filter(([, v]) => v > 0)
-      .sort((a, b) => (b[1] as number) - (a[1] as number))
-      .slice(0, 8);
-
-    const contextData: any = {
-      income: userData.income || 0,
-      fixedTotal: derived.fixedTotal || 0,
-      savingsGoal: derived.goal || 0,
-      spendableMonth: derived.spendableMonth || 0,
-      spentThisMonth: derived.spentThisMonth || 0,
-      remainingSpendable: derived.remainingSpendable || 0,
-      safeSpendToday: derived.safeSpendToday || 0,
-      spentToday: derived.spentToday || 0,
-      weekSpent: derived.weekSpent || 0,
-      deltaWeek: derived.deltaWeek || 0,
-      expectedThisWeek: derived.expectedThisWeek || 0,
-      categoryTotals,
-      topCategories,
-      projectedMonthSpend: derived.projectedMonthSpend || 0,
-      projectedRemaining: derived.projectedRemaining || 0,
-      noSpendStreak: derived.noSpendStreak || 0,
-      daysInMonth: derived.daysInMonth || 0,
-      dayOfMonth: derived.dayOfMonth || 0,
-      daysLeft: derived.daysLeft || 0,
-    };
-
-    if (includeBudgets) {
-      contextData.budgets = budgets;
-    }
-
-    return contextData;
-  };
-
-  const sendMessage = async () => {
-    if (!inputValue.trim() || isLoading) return;
-
-    const userMessage: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: inputValue,
-      timestamp: Date.now(),
-    };
-
-    const updatedMessages = [...chatMessages, userMessage];
-    setChatMessages(updatedMessages);
-    setInputValue("");
-    setIsLoading(true);
-
-    try {
-      const contextData = buildContextData();
-
-      const response = await fetch("/api/financegpt", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: updatedMessages.map((m) => ({ role: m.role, content: m.content })),
-          context: contextData,
-          options: {
-            sessionId,
-            includeNotes,
-            // ✅ IMPORTANT: Send a model you ACTUALLY have (from ListModels)
-            model: "models/gemini-2.5-flash",
-          },
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to get response");
-      }
-
-      const data = await response.json();
-
-      const assistantMessage: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: data.message,
-        timestamp: Date.now(),
-      };
-
-      setChatMessages((prev) => [...prev, assistantMessage]);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to send message");
-      setChatMessages((prev) => prev.slice(0, -1));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const resetChat = () => {
-    if (confirm("Clear all chat history?")) {
-      setChatMessages([]);
-      localStorage.removeItem(FINANCEGPT_CHAT_KEY);
-    }
-  };
-
-  const exportChat = () => {
-    downloadJSON(`financegpt-chat-${new Date().toISOString().split("T")[0]}.json`, {
-      messages: chatMessages,
-      exportedAt: new Date().toISOString(),
-    });
-  };
-
-  const quickPrompts = [
-    { label: "Can I spend ₹500 today?", text: "Can I safely spend ₹500 today?" },
-    {
-      label: "How to reduce spending?",
-      text: "Based on my spending patterns, what's the best way to reduce my expenses?",
-    },
-    { label: "Biggest spending leak?", text: "What's my biggest spending leak this month?" },
-    { label: "Savings strategy", text: "Help me create a realistic savings plan for the next 3 months." },
-  ];
-
-  return (
-    <div className="h-full flex flex-col p-4 md:p-6 space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className={`text-xl font-semibold ${fg}`}>FinanceGPT</h2>
-          <p className={`text-xs ${muted} mt-1`}>Just financial advice • Consult a professional for investment decisions</p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={exportChat} className="p-2 rounded hover:bg-[rgb(var(--muted))]" title="Export chat">
-            <MdDownload size={18} />
-          </button>
-          <button onClick={resetChat} className="p-2 rounded hover:bg-[rgb(var(--muted))]" title="Reset chat">
-            <MdRefresh size={18} />
-          </button>
-        </div>
-      </div>
-
-      {/* Context toggles */}
-      <div className={`rounded-lg border ${border} ${cardBg} p-3 flex flex-wrap gap-2`}>
-        <label className="flex items-center gap-2 text-sm cursor-pointer">
-          <input
-            type="checkbox"
-            checked={includeLast30Days}
-            onChange={(e) => setIncludeLast30Days(e.target.checked)}
-            className="w-4 h-4"
-          />
-          <span className={muted}>Last 30 days only</span>
-        </label>
-        <label className="flex items-center gap-2 text-sm cursor-pointer">
-          <input
-            type="checkbox"
-            checked={includeBudgets}
-            onChange={(e) => setIncludeBudgets(e.target.checked)}
-            className="w-4 h-4"
-          />
-          <span className={muted}>Include budgets</span>
-        </label>
-        <label className="flex items-center gap-2 text-sm cursor-pointer">
-          <input
-            type="checkbox"
-            checked={includeNotes}
-            onChange={(e) => setIncludeNotes(e.target.checked)}
-            className="w-4 h-4"
-          />
-          <span className={muted}>Include spending notes</span>
-        </label>
-      </div>
-
-      {/* Quick prompts */}
-      {chatMessages.length === 0 && (
-        <div className="space-y-2">
-          <p className={`text-xs font-medium ${muted}`}>Quick prompts:</p>
-          <div className="flex flex-wrap gap-2">
-            {quickPrompts.map((prompt, idx) => (
-              <button
-                key={idx}
-                onClick={() => setInputValue(prompt.text)}
-                className={`px-3 py-2 rounded-lg border ${border} text-sm ${muted} hover:bg-[rgb(var(--muted))] transition-colors`}
-              >
-                {prompt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Chat messages */}
-      <div className={`flex-1 overflow-y-auto space-y-4 rounded-lg border ${border} ${cardBg} p-4`}>
-        {chatMessages.length === 0 ? (
-          <div className="h-full flex items-center justify-center">
-            <p className={`text-sm ${muted} text-center`}>
-              Start a conversation about your finances. Ask anything about spending, budgets, or goals.
-            </p>
-          </div>
-        ) : (
-          chatMessages.map((msg) => (
-            <motion.div
-              key={msg.id}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-            >
-              <div
-                className={`max-w-xs md:max-w-md lg:max-w-lg rounded-lg p-4 ${
-                  msg.role === "user" ? `${cardBg} border ${border}` : `bg-[rgb(var(--muted))]`
-                }`}
-              >
-                {msg.role === "assistant" ? (
-                  <div className={`text-sm ${fg} space-y-2 whitespace-pre-wrap wrap-break-word`}>
-                    {msg.content.split("\n").map((line, idx) => {
-                      if (line.startsWith("## ")) {
-                        return (
-                          <h2 key={idx} className="text-base font-bold mt-2 mb-1">
-                            {line.replace(/^## /, "")}
-                          </h2>
-                        );
-                      }
-                      if (line.startsWith("# ")) {
-                        return (
-                          <h1 key={idx} className="text-lg font-bold mt-3 mb-2">
-                            {line.replace(/^# /, "")}
-                          </h1>
-                        );
-                      }
-                      if (line.startsWith("- ")) {
-                        return (
-                          <div key={idx} className="ml-4 flex gap-2">
-                            <span>•</span>
-                            <span>{line.replace(/^- /, "")}</span>
-                          </div>
-                        );
-                      }
-                      if (/^\d+\./.test(line)) {
-                        return (
-                          <div key={idx} className="ml-4">
-                            {line}
-                          </div>
-                        );
-                      }
-                      if (line.trim()) {
-                        return (
-                          <p key={idx} className="mb-2">
-                            {line.split("**").map((part, i) =>
-                              i % 2 === 0 ? part : <strong key={i}>{part}</strong>
-                            )}
-                          </p>
-                        );
-                      }
-                      return <div key={idx} className="h-1" />;
-                    })}
-                  </div>
-                ) : (
-                  <p className={`text-sm ${fg} whitespace-pre-wrap wrap-break-word`}>{msg.content}</p>
-                )}
-                <p className={`text-xs ${muted} mt-2`}>{new Date(msg.timestamp).toLocaleTimeString()}</p>
-              </div>
-            </motion.div>
-          ))
-        )}
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className={`rounded-lg p-3 bg-[rgb(var(--muted))]`}>
-              <div className="flex gap-2">
-                <div className="w-2 h-2 bg-[rgb(var(--foreground))] rounded-full animate-bounce"></div>
-                <div
-                  className="w-2 h-2 bg-[rgb(var(--foreground))] rounded-full animate-bounce"
-                  style={{ animationDelay: "0.2s" }}
-                ></div>
-                <div
-                  className="w-2 h-2 bg-[rgb(var(--foreground))] rounded-full animate-bounce"
-                  style={{ animationDelay: "0.4s" }}
-                ></div>
-              </div>
-            </div>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Input */}
-      <div className={`flex gap-2`}>
-        <textarea
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              sendMessage();
-            }
-          }}
-          placeholder="Ask me anything about your finances."
-          className={`${inputBase} flex-1 resize-none max-h-20 py-2`}
-          rows={2}
-        />
-        <button
-          onClick={sendMessage}
-          disabled={isLoading || !inputValue.trim()}
-          className="p-3 rounded-lg bg-[rgb(var(--foreground))] text-[rgb(var(--background))] hover:opacity-90 disabled:opacity-50 transition-opacity"
-        >
-          <MdSend size={20} />
-        </button>
-      </div>
-    </div>
-  );
-}
 
 // Old Settings component removed.
 
@@ -586,6 +226,29 @@ function DashboardView({
   const [budgets, setBudgets] = useState<Record<SpendCategory, number>>(defaultBudgets);
   const [budgetsOpen, setBudgetsOpen] = useState(false);
   const [budgetSaved, setBudgetSaved] = useState(false);
+  const [isWhatIfOpen, setIsWhatIfOpen] = useState(false);
+  const [showMOM, setShowMOM] = useState(false);
+
+  const recurringNudge = useMemo(() => {
+    if (!logs) return null;
+    return detectRecurring(logs, []); // Pass empty existing rules for now
+  }, [logs]);
+
+  // Confidence and Insights
+  const confidence = useMemo(() => {
+    if (!derived) return { score: 0, reason: "Loading...", timestamp: "" };
+    return computeConfidenceScore(derived as any as DashboardContext);
+  }, [derived, budgets]);
+
+  const timeSensitivity = useMemo(() => {
+    if (!derived) return null;
+    return getTimeSensitivity(derived as any as DashboardContext);
+  }, [derived]);
+
+  const fatigue = useMemo(() => {
+    if (!logs) return { detected: false, count: 0 };
+    return detectFatigue(logs);
+  }, [logs]);
 
   useEffect(() => {
     const stored = safeParseJSON<Record<SpendCategory, number>>(localStorage.getItem(BUDGETS_KEY));
@@ -776,6 +439,158 @@ function DashboardView({
             Days left: {derived.daysLeft} • Month progress: {Math.round(derived.monthProgress * 100)}%
           </p>
         </motion.div>
+      </div>
+
+      {/* NEW: Insight & Quick Action Bar */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <ConfidenceWidget 
+          confidence={confidence}
+          border={border}
+          cardBg={cardBg}
+          fg={fg}
+          muted={muted}
+        />
+
+        <div className={`rounded-xl border ${border} ${cardBg} p-4 flex flex-col justify-between`}>
+          <div>
+            <p className={`text-xs ${muted}`}>Daily Action</p>
+            <p className={`text-sm font-semibold ${fg} mt-1`}>Spend limits</p>
+          </div>
+          <button 
+            onClick={() => setIsWhatIfOpen(true)}
+            className={`${buttonPrimary} w-full mt-3 flex items-center gap-2`}
+          >
+            <MdLightbulb size={16} /> What-if Simulator
+          </button>
+        </div>
+
+        {timeSensitivity ? (
+          <div className={`rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4 flex flex-col justify-between`}>
+            <div>
+              <p className="text-xs text-yellow-500 font-bold uppercase tracking-wider">{timeSensitivity.label}</p>
+              <p className={`text-xs ${fg} mt-2 line-clamp-2`}>{timeSensitivity.message}</p>
+            </div>
+            <p className="text-[10px] text-yellow-500/60 mt-2">Wise AI insight</p>
+          </div>
+        ) : (
+          <div className={`rounded-xl border ${border} ${cardBg} p-4 flex flex-col justify-between`}>
+            <p className={`text-xs ${muted}`}>Tip of the day</p>
+            <p className={`text-xs ${fg} mt-2`}>Logging every expense, no matter how small, increases budget accuracy by 40%.</p>
+            <p className="text-[10px] text-blue-500/60 mt-2">Finance Pro Tip</p>
+          </div>
+        )}
+
+        {fatigue.detected ? (
+          <div className={`rounded-xl border border-red-500/20 bg-red-500/5 p-4 flex flex-col justify-between`}>
+             <div>
+              <p className="text-xs text-red-500 font-bold uppercase tracking-wider">Spend Fatigue</p>
+              <p className={`text-xs ${fg} mt-2`}>You've made {fatigue.count} spends recently. Consider pausing for 24h.</p>
+            </div>
+            <button className="text-[10px] text-red-500 font-semibold hover:underline mt-2">Active mini-cap?</button>
+          </div>
+        ) : (
+          <div className={`rounded-xl border ${border} ${cardBg} p-4 flex flex-col justify-between`}>
+            <p className={`text-xs ${muted}`}>Savings Streak</p>
+            <p className={`text-sm font-semibold ${fg} mt-1`}>{derived.noSpendStreak} Days</p>
+            <p className="text-[10px] text-green-500/60 mt-2">Keep it up!</p>
+          </div>
+        )}
+      </div>
+
+      {/* Recurring Nudge */}
+      {recurringNudge && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }} 
+          animate={{ opacity: 1, y: 0 }}
+          className={`rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4 flex items-center justify-between gap-4`}
+        >
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-lg bg-indigo-500/10 text-indigo-500`}>
+                <MdRepeat size={20} />
+            </div>
+            <div>
+              <p className={`text-sm font-semibold ${fg}`}>Potential Recurring Detected</p>
+              <p className={`text-xs ${muted}`}>We noticed "{recurringNudge.title || recurringNudge.category}" repeats. Track it automatically?</p>
+            </div>
+          </div>
+          <button className={`${buttonPrimary} whitespace-nowrap`}>Setup Rule</button>
+        </motion.div>
+      )}
+
+      <WhatIfModal 
+        isOpen={isWhatIfOpen} 
+        onClose={() => setIsWhatIfOpen(false)} 
+        context={derived as any as DashboardContext}
+        border={border}
+        cardBg={cardBg}
+        shellBg={shellBg}
+        fg={fg}
+        muted={muted}
+        inputBase={inputBase}
+        buttonPrimary={buttonPrimary}
+      />
+
+      {/* Me vs Last Month Comparison */}
+      <div className={`rounded-xl border ${border} ${cardBg} overflow-hidden shadow-sm`}>
+        <button 
+          onClick={() => setShowMOM(!showMOM)}
+          className={`w-full p-4 flex items-center justify-between hover:bg-[rgb(var(--muted))]/30 transition-colors`}
+        >
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-lg bg-indigo-500/10 text-indigo-500`}>
+              <MdTrendingUp size={20} />
+            </div>
+            <div className="text-left">
+              <h3 className={`text-sm font-semibold ${fg}`}>Me vs Last Month</h3>
+              <p className={`text-xs ${muted}`}>Visualizing your progress</p>
+            </div>
+          </div>
+          <motion.div animate={{ rotate: showMOM ? 180 : 0 }}>
+             <MdExpandLess size={20} className={muted} />
+          </motion.div>
+        </button>
+
+        <AnimatePresence>
+          {showMOM && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="px-4 pb-4 border-t border-[rgb(var(--border))]"
+            >
+              <div className="pt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className={`p-4 rounded-xl ${shellBg} border ${border}`}>
+                   <p className={`text-xs ${muted}`}>Total Spent</p>
+                   <div className="mt-2 flex items-end gap-2">
+                      <p className={`text-lg font-bold ${fg}`}>₹{formatINR(derived.spentThisMonth)}</p>
+                      <span className={`text-xs ${derived.spentThisMonth < 10000 ? 'text-green-500' : 'text-red-500'} mb-1`}>
+                        {derived.spentThisMonth < 10000 ? '↓ 12%' : '↑ 5%'}
+                      </span>
+                   </div>
+                   <p className="text-[10px] text-white/40 mt-1">vs ₹11,200 last month</p>
+                </div>
+                
+                <div className={`p-4 rounded-xl ${shellBg} border ${border}`}>
+                   <p className={`text-xs ${muted}`}>Savings Rate</p>
+                   <div className="mt-2 flex items-end gap-2">
+                      <p className={`text-lg font-bold ${fg}`}>24%</p>
+                      <span className={`text-xs text-green-500 mb-1`}>↑ 4%</span>
+                   </div>
+                   <p className="text-[10px] text-white/40 mt-1">vs 20% last month</p>
+                </div>
+
+                <div className={`p-4 rounded-xl ${shellBg} border ${border}`}>
+                   <p className={`text-xs ${muted}`}>Top Category Delta</p>
+                   <div className="mt-2 flex items-end gap-2">
+                      <p className={`text-lg font-bold ${fg}`}>Food</p>
+                      <span className={`text-xs text-red-500 mb-1`}>↑ ₹800</span>
+                   </div>
+                   <p className="text-[10px] text-white/40 mt-1">Increasing trend detected</p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Health + Projections + Week remaining safe spend */}
@@ -1550,8 +1365,9 @@ export default function Home() {
 
       daysLeftThisWeek,
       safeSpendRestOfWeek,
+      budgets,
     };
-  }, [userData, logs]);
+  }, [userData, logs, budgets]);
 
   const refreshData = () => {
     const data = safeParseJSON<any>(localStorage.getItem(USER_KEY));
@@ -1777,6 +1593,15 @@ export default function Home() {
         }}
       />
 
+      {/* Background Watchers */}
+      {userData && derived && (
+        <NotificationWatcher 
+          context={derived as any as DashboardContext}
+          preferences={userData.notificationPrefs || {}}
+          onNewNotification={addNotification}
+        />
+      )}
+
       {/* Mobile overlay */}
       {sidebarOpen ? (
         <button
@@ -1912,6 +1737,7 @@ export default function Home() {
                   </p>
                 </div>
                 <div className="pl-2 border-l border-[rgb(var(--border))] flex items-center gap-3">
+
                   {user?.photoURL && (
                     <Image 
                       src={user.photoURL} 
@@ -1936,135 +1762,140 @@ export default function Home() {
           </div>
 
           {/* View content */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden">
-            {currentView === "dashboard" ? (
-              <DashboardView
-                derived={derived}
-                userData={userData}
-                logs={logs}
-                goals={goals}
-                checkAmount={checkAmount}
-                setCheckAmount={setCheckAmount}
-                checkNote={checkNote}
-                setCheckNote={setCheckNote}
-                checkCategory={checkCategory}
-                setCheckCategory={setCheckCategory}
-                checkStatus={checkStatus}
-                checkMessage={checkMessage}
-                runCheck={runCheck}
-                deleteLog={deleteLog}
-                clearAllLogs={clearAllLogs}
-                inputBase={inputBase}
-                buttonPrimary={buttonPrimary}
-                buttonDanger={buttonDanger}
-                buttonGhost={buttonGhost}
-                border={border}
-                cardBg={cardBg}
-                shellBg={shellBg}
-                fg={fg}
-                muted={muted}
-              />
-            ) : currentView === "transactions" ? (
-              <TransactionsView
-                logs={logs}
-                onAddLog={addLog}
-                onDeleteLog={deleteLog}
-                border={border}
-                cardBg={cardBg}
-                shellBg={shellBg}
-                fg={fg}
-                muted={muted}
-                inputBase={inputBase}
-                buttonPrimary={buttonPrimary}
-                buttonDanger={buttonDanger}
-              />
-            ) : currentView === "recurring" ? (
-              <RecurringView
-                rules={recurring}
-                onAddRule={addRecurringRule}
-                onDeleteRule={deleteRecurringRule}
-                onRunDue={runDueRecurring}
-                border={border}
-                cardBg={cardBg}
-                shellBg={shellBg}
-                fg={fg}
-                muted={muted}
-                inputBase={inputBase}
-                buttonPrimary={buttonPrimary}
-                buttonDanger={buttonDanger}
-              />
-            ) : currentView === "goals" ? (
-              <GoalsView
-                goals={goals}
-                onAddGoal={addGoal}
-                onDeleteGoal={deleteGoal}
-                onAddContribution={addContribution}
-                border={border}
-                cardBg={cardBg}
-                shellBg={shellBg}
-                fg={fg}
-                muted={muted}
-                inputBase={inputBase}
-                buttonPrimary={buttonPrimary}
-                buttonDanger={buttonDanger}
-              />
-            ) : currentView === "reports" ? (
-              <ReportsView
-                logs={logs}
-                border={border}
-                cardBg={cardBg}
-                shellBg={shellBg}
-                fg={fg}
-                muted={muted}
-                inputBase={inputBase}
-                buttonPrimary={buttonPrimary}
-              />
-            ) : currentView === "insights" ? (
-              <InsightsView
-                logs={logs}
-                border={border}
-                cardBg={cardBg}
-                shellBg={shellBg}
-                fg={fg}
-                muted={muted}
-              />
-            ) : currentView === "notifications" ? (
-              <NotificationsView
-                notifications={notifications}
-                onDeleteNotif={deleteNotification}
-                onMarkRead={markNotificationRead}
-                border={border}
-                cardBg={cardBg}
-                shellBg={shellBg}
-                fg={fg}
-                muted={muted}
-              />
-            ) : currentView === "financegpt" ? (
-              <FinanceGPT
-                userData={userData}
-                derived={derived}
-                logs={logs}
-                budgets={budgets}
-                inputBase={inputBase}
-                border={border}
-                cardBg={cardBg}
-                shellBg={shellBg}
-                fg={fg}
-                muted={muted}
-                onAddLog={addLog}
-              />
-            ) : currentView === "settings" ? (
-              <SettingsView 
-                userData={userData} 
-                onUpdate={refreshData} 
-                border={border}
-                cardBg={cardBg}
-                fg={fg}
-                muted={muted}
-                inputBase={inputBase}
-                buttonPrimary={buttonPrimary}
-              />
-            ) : null}
+          <div className="flex-1 flex overflow-hidden">
+            <div className={`flex-1 overflow-y-auto overflow-x-hidden transition-all duration-300`}>
+              {currentView === "dashboard" ? (
+                <DashboardView
+                  derived={derived}
+                  userData={userData}
+                  logs={logs}
+                  goals={goals}
+                  checkAmount={checkAmount}
+                  setCheckAmount={setCheckAmount}
+                  checkNote={checkNote}
+                  setCheckNote={setCheckNote}
+                  checkCategory={checkCategory}
+                  setCheckCategory={setCheckCategory}
+                  checkStatus={checkStatus}
+                  checkMessage={checkMessage}
+                  runCheck={runCheck}
+                  deleteLog={deleteLog}
+                  clearAllLogs={clearAllLogs}
+                  inputBase={inputBase}
+                  buttonPrimary={buttonPrimary}
+                  buttonDanger={buttonDanger}
+                  buttonGhost={buttonGhost}
+                  border={border}
+                  cardBg={cardBg}
+                  shellBg={shellBg}
+                  fg={fg}
+                  muted={muted}
+                />
+              ) : currentView === "transactions" ? (
+                <TransactionsView
+                  logs={logs}
+                  onAddLog={addLog}
+                  onDeleteLog={deleteLog}
+                  border={border}
+                  cardBg={cardBg}
+                  shellBg={shellBg}
+                  fg={fg}
+                  muted={muted}
+                  inputBase={inputBase}
+                  buttonPrimary={buttonPrimary}
+                  buttonDanger={buttonDanger}
+                  goals={goals}
+                />
+              ) : currentView === "recurring" ? (
+                <RecurringView
+                  rules={recurring}
+                  onAddRule={addRecurringRule}
+                  onDeleteRule={deleteRecurringRule}
+                  onRunDue={runDueRecurring}
+                  border={border}
+                  cardBg={cardBg}
+                  shellBg={shellBg}
+                  fg={fg}
+                  muted={muted}
+                  inputBase={inputBase}
+                  buttonPrimary={buttonPrimary}
+                  buttonDanger={buttonDanger}
+                />
+              ) : currentView === "goals" ? (
+                <GoalsView
+                  goals={goals}
+                  onAddGoal={addGoal}
+                  onDeleteGoal={deleteGoal}
+                  onAddContribution={addContribution}
+                  border={border}
+                  cardBg={cardBg}
+                  shellBg={shellBg}
+                  fg={fg}
+                  muted={muted}
+                  inputBase={inputBase}
+                  buttonPrimary={buttonPrimary}
+                  buttonDanger={buttonDanger}
+                />
+              ) : currentView === "reports" ? (
+                <ReportsView
+                  logs={logs}
+                  border={border}
+                  cardBg={cardBg}
+                  shellBg={shellBg}
+                  fg={fg}
+                  muted={muted}
+                  inputBase={inputBase}
+                  buttonPrimary={buttonPrimary}
+                />
+              ) : currentView === "insights" ? (
+                <InsightsView
+                  logs={logs}
+                  border={border}
+                  cardBg={cardBg}
+                  shellBg={shellBg}
+                  fg={fg}
+                  muted={muted}
+                />
+              ) : currentView === "notifications" ? (
+                <NotificationsView
+                  notifications={notifications}
+                  onDeleteNotif={deleteNotification}
+                  onMarkRead={markNotificationRead}
+                  border={border}
+                  cardBg={cardBg}
+                  shellBg={shellBg}
+                  fg={fg}
+                  muted={muted}
+                />
+              ) : currentView === "financegpt" ? (
+                <FinanceGPT
+                  userData={userData}
+                  derived={derived}
+                  logs={logs}
+                  budgets={budgets}
+                  inputBase={inputBase}
+                  border={border}
+                  cardBg={cardBg}
+                  shellBg={shellBg}
+                  fg={fg}
+                  muted={muted}
+                  onAddLog={addLog}
+                />
+              ) : currentView === "settings" ? (
+                <SettingsView 
+                  userData={userData} 
+                  onUpdate={refreshData} 
+                  border={border}
+                  cardBg={cardBg}
+                  fg={fg}
+                  muted={muted}
+                  inputBase={inputBase}
+                  buttonPrimary={buttonPrimary}
+                />
+              ) : null}
+            </div>
+
+
           </div>
         </main>
       </div>

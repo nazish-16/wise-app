@@ -24,6 +24,8 @@ import {
   BiCalendarAlt,
   BiCopy,
   BiMoney,
+  BiMemoryCard,
+  BiTargetLock,
 } from "react-icons/bi";
 
 type ChatMessage = {
@@ -95,6 +97,7 @@ const CATEGORIES: SpendCategory[] = [
 ];
 
 const FINANCEGPT_CHAT_KEY = "wise_financegpt_chat";
+const FINANCEGPT_DECISIONS_KEY = "wise_financegpt_decisions";
 const SESSION_ID_KEY = "wise_session_id";
 
 /** ✅ NEW: Toggles shown only on the empty / main screen */
@@ -502,6 +505,7 @@ export function FinanceGPT({
   fg: string;
   muted: string;
   onAddLog: (log: SpendLog) => void;
+  isSilentMode?: boolean;
 }) {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
@@ -511,6 +515,7 @@ export function FinanceGPT({
   const [includeLast30Days, setIncludeLast30Days] = useState(true);
   const [includeBudgets, setIncludeBudgets] = useState(true);
   const [scrolledUp, setScrolledUp] = useState(false);
+  const [decisions, setDecisions] = useState<any[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -528,6 +533,11 @@ export function FinanceGPT({
       localStorage.getItem(FINANCEGPT_CHAT_KEY)
     );
     if (savedChat) setChatMessages(savedChat);
+
+    const savedDecisions = safeParseJSON<any[]>(
+      localStorage.getItem(FINANCEGPT_DECISIONS_KEY)
+    );
+    if (savedDecisions) setDecisions(savedDecisions);
   }, []);
 
   useEffect(() => {
@@ -548,6 +558,7 @@ export function FinanceGPT({
   };
 
   const buildContextData = () => {
+    if (!derived || !userData) return {};
     let logsToUse = logs;
 
     if (includeLast30Days) {
@@ -639,6 +650,28 @@ export function FinanceGPT({
 
       const data = await response.json();
       let assistantText = data.message;
+
+      // Decision Detection
+      if (text.toLowerCase().includes("can i") || text.toLowerCase().includes("should i spend")) {
+        const amountMatch = text.match(/₹?\s?(\d+(?:\.\d+)?)/);
+        if (amountMatch) {
+          const amount = Number(amountMatch[1]);
+          const recommendedAction = assistantText.toLowerCase().includes("safe") ? "SAFE" : 
+                                  assistantText.toLowerCase().includes("not advised") ? "NOT ADVISED" : "RISKY";
+          
+          const newDecision = {
+            id: crypto.randomUUID(),
+            timestamp: new Date().toISOString(),
+            question: text,
+            amount,
+            recommendedAction,
+            category: "Other" // Default
+          };
+          const updatedDecisions = [newDecision, ...decisions].slice(0, 10);
+          setDecisions(updatedDecisions);
+          localStorage.setItem(FINANCEGPT_DECISIONS_KEY, JSON.stringify(updatedDecisions));
+        }
+      }
 
       // Check for JSON command block
       const commandRegex = /```json\s*(\{[\s\S]*?"command"\s*:\s*"add_log"[\s\S]*?\})\s*```/;
@@ -775,6 +808,27 @@ export function FinanceGPT({
                 fg={fg}
                 muted={muted}
               />
+
+              {/* Decision Memory Chip */}
+              {decisions.length > 0 && (
+                <div className="w-full max-w-2xl">
+                   <div className={`p-3 rounded-xl border ${border} ${cardBg} flex items-center justify-between gap-3`}>
+                    <div className="flex items-center gap-2">
+                       <BiMemoryCard className="text-indigo-500" size={18} />
+                       <span className={`text-xs font-semibold ${fg}`}>Recent Decision</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                        decisions[0].recommendedAction === 'SAFE' ? 'bg-green-500/10 text-green-500' : 
+                        decisions[0].recommendedAction === 'RISKY' ? 'bg-yellow-500/10 text-yellow-500' : 'bg-red-500/10 text-red-500'
+                      }`}>
+                        {decisions[0].recommendedAction}
+                      </span>
+                      <span className={`text-[10px] ${muted}`}>₹{formatINR(decisions[0].amount)}</span>
+                    </div>
+                   </div>
+                </div>
+              )}
 
               <QuickActionChips onSelect={sendMessage} fg={fg} border={border} />
             </motion.div>

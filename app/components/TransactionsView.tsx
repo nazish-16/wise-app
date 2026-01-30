@@ -24,6 +24,7 @@ export function TransactionsView({
   inputBase,
   buttonPrimary,
   buttonDanger,
+  goals = [],
 }: {
   logs: SpendLog[];
   onAddLog: (log: SpendLog) => void;
@@ -36,6 +37,7 @@ export function TransactionsView({
   inputBase: string;
   buttonPrimary: string;
   buttonDanger: string;
+  goals?: any[];
 }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [filterCategory, setFilterCategory] = useState<SpendCategory | "All">("All");
@@ -49,7 +51,19 @@ export function TransactionsView({
     type: "expense" as "income" | "expense",
     date: new Date().toISOString().split("T")[0],
     time: new Date().toTimeString().slice(0, 5),
+    intent: "Essential" as "Essential" | "Comfort" | "Impulse",
   });
+
+  const goalImpact = useMemo(() => {
+    const amt = Number(formData.amount || 0);
+    if (amt <= 0 || !goals.length) return null;
+    const impact = goals.map(g => {
+      const remaining = g.targetAmount - g.currentSaved;
+      const delayedBy = Math.ceil(amt / (remaining / 30)); // Rough estimate
+      return { title: g.title, delay: delayedBy };
+    }).filter(i => i.delay > 0);
+    return impact[0]; // Show first goal impact
+  }, [formData.amount, goals]);
 
   const filteredLogs = useMemo(() => {
     let result = logs.filter((l) => {
@@ -83,6 +97,7 @@ export function TransactionsView({
       category: formData.category,
       type: formData.type,
       createdAt: dateTime,
+      intent: formData.type === 'expense' ? formData.intent : undefined
     });
 
     toast.success("Transaction added");
@@ -94,6 +109,7 @@ export function TransactionsView({
       type: "expense",
       date: new Date().toISOString().split("T")[0],
       time: new Date().toTimeString().slice(0, 5),
+      intent: "Essential",
     });
   };
 
@@ -158,10 +174,20 @@ export function TransactionsView({
                 <p className={`text-sm font-medium ${fg}`}>
                   {log.type === "income" ? "+" : "−"}₹{formatINR(log.amount)}
                 </p>
-                <p className={`text-xs ${muted} truncate`}>
-                  {(log.category || "Other")} {log.note ? `• ${log.note}` : ""}
-                </p>
-                <p className={`text-xs ${muted}`}>{new Date(log.createdAt).toLocaleString()}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <p className={`text-xs ${muted} truncate`}>
+                    {(log.category || "Other")} {log.note ? `• ${log.note}` : ""}
+                  </p>
+                  {log.intent && (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                      log.intent === 'Essential' ? 'bg-green-500/10 text-green-500' :
+                      log.intent === 'Comfort' ? 'bg-blue-500/10 text-blue-500' : 'bg-red-500/10 text-red-500'
+                    }`}>
+                      {log.intent}
+                    </span>
+                  )}
+                </div>
+                <p className={`text-xs ${muted} mt-1`}>{new Date(log.createdAt).toLocaleString()}</p>
               </div>
               <button onClick={() => { onDeleteLog(log.id); toast.success("Deleted"); }} className={`${buttonDanger}`}>
                 <MdDelete size={16} />
@@ -209,16 +235,24 @@ export function TransactionsView({
                 <input type="text" value={formData.note} onChange={(e) => setFormData({ ...formData, note: e.target.value })} placeholder="e.g., coffee at Starbucks" className={inputBase} />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              {formData.type === 'expense' && (
                 <div>
-                  <label className={`block text-xs font-medium mb-1 ${muted}`}>Date</label>
-                  <input type="date" value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} className={inputBase} />
+                  <label className={`block text-xs font-medium mb-1 ${muted}`}>Spend Intent</label>
+                  <select value={formData.intent} onChange={(e) => setFormData({ ...formData, intent: e.target.value as any })} className={inputBase}>
+                    <option value="Essential">Essential (Needs)</option>
+                    <option value="Comfort">Comfort (Wants)</option>
+                    <option value="Impulse">Impulse (Unplanned)</option>
+                  </select>
                 </div>
-                <div>
-                  <label className={`block text-xs font-medium mb-1 ${muted}`}>Time</label>
-                  <input type="time" value={formData.time} onChange={(e) => setFormData({ ...formData, time: e.target.value })} className={inputBase} />
+              )}
+
+              {goalImpact && formData.type === 'expense' && (
+                <div className="p-3 rounded-lg bg-yellow-500/5 border border-yellow-500/20">
+                  <p className="text-xs text-yellow-500/80">
+                    <span className="font-bold">Goal Friction:</span> This spend could delay your "{goalImpact.title}" goal by approx. <span className="font-bold">{goalImpact.delay} days</span>.
+                  </p>
                 </div>
-              </div>
+              )}
 
               <div className="flex gap-2 justify-end">
                 <button onClick={() => setModalOpen(false)} className={`px-4 py-2 rounded-lg border ${border} text-sm`}>Cancel</button>

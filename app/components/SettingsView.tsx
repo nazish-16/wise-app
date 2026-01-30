@@ -22,6 +22,7 @@ export function SettingsView({
   onUpdate,
   border,
   cardBg,
+  shellBg,
   fg,
   muted,
   inputBase,
@@ -37,7 +38,18 @@ export function SettingsView({
   );
   
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<"profile" | "finance" | "account">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "finance" | "account" | "notifications">("profile");
+
+  const [notificationPrefs, setNotificationPrefs] = useState({
+    budgetThreshold: userData?.notificationPrefs?.budgetThreshold || 90,
+    dailySafeSpendWarning: userData?.notificationPrefs?.dailySafeSpendWarning ?? true,
+    weeklyReminder: userData?.notificationPrefs?.weeklyReminder ?? true,
+    browserNotifications: userData?.notificationPrefs?.browserNotifications ?? false,
+    fatigueAlerts: userData?.notificationPrefs?.fatigueAlerts ?? true,
+    recurringAlerts: userData?.notificationPrefs?.recurringAlerts ?? true,
+    quietHoursStart: userData?.notificationPrefs?.quietHoursStart || "22:00",
+    quietHoursEnd: userData?.notificationPrefs?.quietHoursEnd || "08:00",
+  });
 
   const handleSave = async () => {
     if (!user) return;
@@ -49,7 +61,8 @@ export function SettingsView({
         income: Number(income || 0),
         fixedExpenses: Number(fixedExpenses || 0),
         savingsGoal: Number(savingsGoal || 0),
-        monthlySubscriptions: Number(monthlySubscriptions || 0),
+        monthSubscriptions: Number(monthlySubscriptions || 0),
+        notificationPrefs,
         updatedAt: new Date().toISOString()
       };
       
@@ -72,6 +85,7 @@ export function SettingsView({
   const tabs = [
     { id: "profile", label: "Profile", icon: MdPerson },
     { id: "finance", label: "Financial Info", icon: MdAccountBalance },
+    { id: "notifications", label: "Notifications", icon: MdNotifications },
     { id: "account", label: "Security", icon: MdSecurity },
   ];
 
@@ -290,7 +304,133 @@ export function SettingsView({
             </div>
           )}
 
-          {/* ACCOUNT TAB */}
+          {/* NOTIFICATIONS TAB */}
+          {activeTab === "notifications" && (
+            <div className={`rounded-2xl border ${border} ${cardBg} p-6 shadow-sm space-y-8`}>
+              <div>
+                <h3 className={`text-lg font-bold ${fg}`}>Notification Preferences</h3>
+                <p className={`${muted} text-xs`}>Control how and when Wise alerts you.</p>
+              </div>
+
+              <div className="space-y-6">
+                <div className={`flex items-center justify-between p-4 rounded-xl border ${border} ${shellBg}`}>
+                  <div>
+                    <p className={`font-semibold ${fg}`}>Browser Notifications</p>
+                    <p className={`text-xs ${muted}`}>Enable real-time alerts in your browser.</p>
+                  </div>
+                  <button 
+                    onClick={() => setNotificationPrefs(prev => ({ ...prev, browserNotifications: !prev.browserNotifications }))}
+                    className={`w-12 h-6 rounded-full transition-colors relative ${notificationPrefs.browserNotifications ? "bg-indigo-600" : "bg-[rgb(var(--muted))]"}`}
+                  >
+                    <motion.div 
+                      animate={{ x: notificationPrefs.browserNotifications ? 26 : 2 }}
+                      className="absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm" 
+                    />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                     <label className="flex items-center gap-3 cursor-pointer group">
+                      <input 
+                        type="checkbox" 
+                        checked={notificationPrefs.fatigueAlerts} 
+                        onChange={e => setNotificationPrefs(prev => ({ ...prev, fatigueAlerts: e.target.checked }))}
+                        className="w-5 h-5 rounded border-[rgb(var(--border))] text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <div>
+                        <p className={`text-sm font-medium ${fg}`}>Spend Fatigue Alerts</p>
+                        <p className={`text-xs ${muted}`}>Nudges when spending frequency is high.</p>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-3 cursor-pointer group">
+                      <input 
+                        type="checkbox" 
+                        checked={notificationPrefs.dailySafeSpendWarning} 
+                        onChange={e => setNotificationPrefs(prev => ({ ...prev, dailySafeSpendWarning: e.target.checked }))}
+                        className="w-5 h-5 rounded border-[rgb(var(--border))] text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <div>
+                        <p className={`text-sm font-medium ${fg}`}>Daily Limit Warning</p>
+                        <p className={`text-xs ${muted}`}>Alert when you cross today's safe limit.</p>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className="space-y-4">
+                    <label className="flex items-center gap-3 cursor-pointer group">
+                      <input 
+                        type="checkbox" 
+                        checked={notificationPrefs.recurringAlerts} 
+                        onChange={e => setNotificationPrefs(prev => ({ ...prev, recurringAlerts: e.target.checked }))}
+                        className="w-5 h-5 rounded border-[rgb(var(--border))] text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <div>
+                        <p className={`text-sm font-medium ${fg}`}>Recurring Detection</p>
+                        <p className={`text-xs ${muted}`}>Prompt to track patterns automatically.</p>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-3 cursor-pointer group">
+                      <input 
+                        type="checkbox" 
+                        checked={notificationPrefs.weeklyReminder} 
+                        onChange={e => setNotificationPrefs(prev => ({ ...prev, weeklyReminder: e.target.checked }))}
+                        className="w-5 h-5 rounded border-[rgb(var(--border))] text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <div>
+                        <p className={`text-sm font-medium ${fg}`}>Weekly Summary</p>
+                        <p className={`text-xs ${muted}`}>A gentle recap of your week every Monday.</p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-[rgb(var(--border))] space-y-4">
+                  <h4 className={`text-sm font-semibold ${fg}`}>Quiet Hours</h4>
+                  <p className={`text-xs ${muted}`}>Mute alerts during these times (browser notifications only).</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <p className={`text-xs font-medium ${muted}`}>Start</p>
+                      <input 
+                        type="time" 
+                        value={notificationPrefs.quietHoursStart}
+                        onChange={e => setNotificationPrefs(prev => ({ ...prev, quietHoursStart: e.target.value }))}
+                        className={inputBase} 
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className={`text-xs font-medium ${muted}`}>End</p>
+                      <input 
+                        type="time" 
+                        value={notificationPrefs.quietHoursEnd}
+                        onChange={e => setNotificationPrefs(prev => ({ ...prev, quietHoursEnd: e.target.value }))}
+                        className={inputBase} 
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 flex justify-end">
+                <button
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  className={`flex items-center gap-2 px-8 py-3 rounded-xl bg-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 transition-all disabled:opacity-50`}
+                >
+                  {isSaving ? (
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <MdCheck size={20} />
+                      Save Preferences
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
           {activeTab === "account" && (
             <div className="space-y-6">
               <div className={`rounded-2xl border ${border} ${cardBg} p-6 shadow-sm space-y-4`}>
