@@ -31,6 +31,8 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { useAuth } from "@/app/components/FirebaseAuthProvider";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 // --- Components ---
 
@@ -296,12 +298,185 @@ const FloatingNavbar = ({ user, signInWithGoogle, logout }: any) => {
   );
 };
 
-// ... imports ...
-// ... imports
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+const FixedFinanceGPT = ({ isLoggedIn }: { isLoggedIn: boolean }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [input, setInput] = useState("");
+  const [messages, setMessages] = useState<{role: 'user' | 'assistant', text: string}[]>([
+    { role: 'assistant', text: "I'm connected to Wise. Ask me how I can help you save today." }
+  ]);
+  const [isTyping, setIsTyping] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-// ...
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages, isTyping, isOpen]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim()) return;
+
+    if (!isOpen) {
+      setIsOpen(true);
+    }
+
+    const userMsg = input;
+    setInput("");
+    setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
+    setIsTyping(true);
+
+    try {
+        // We instruct the AI to act as a product guide since we are on the landing page
+        const landingContextMessages = [
+           { 
+             role: "user", 
+             content: `I am a visitor on the Wise App landing page. 
+             Status: ${isLoggedIn ? 'Logged In' : 'Guest'}.
+             
+             Your Goal: Explain the features of Wise (Safe Spend, Recurring Subscriptions, AI Audit, Bank-grade Security).
+             Do NOT give me specific financial advice or mock insights like "You spent $50 on coffee".
+             Instead, explain HOW Wise works.
+             
+             If I ask "What is Safe Spend?", explain: "Safe Spend calculates your daily available cash based on income minus fixed bills and savings goals."` 
+           },
+           { role: "assistant", content: "Understood. I will answer as a product expert about Wise features." }
+        ];
+
+        const history = messages.map(m => ({ role: m.role, content: m.text }));
+        
+        // Combine: Context -> Chat History -> New Message
+        const apiMessages = [
+            ...landingContextMessages,
+            ...history, 
+            { role: "user", content: userMsg }
+        ];
+
+        const response = await fetch('/api/financegpt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                messages: apiMessages,
+                context: {}, // Empty context to prevent dashboard logic
+                options: {
+                    model: "gemini-2.5-flash", 
+                    sessionId: "landing-page-visitor"
+                }
+            })
+        });
+
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || "Failed to get response");
+        }
+
+        setIsTyping(false);
+        setMessages(prev => [...prev, { role: 'assistant', text: data.message }]);
+    } catch (error) {
+        console.error("Chat Error:", error);
+        setIsTyping(false);
+        setMessages(prev => [...prev, { role: 'assistant', text: "I'm having trouble connecting to the server. Please try again." }]);
+    }
+  };
+
+  return (
+    <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[60] w-full max-w-lg px-4 pointer-events-none">
+       {/* Chat Window */}
+       <AnimatePresence>
+         {isOpen && (
+           <motion.div
+             initial={{ opacity: 0, y: 20, height: 0 }}
+             animate={{ opacity: 1, y: 0, height: "400px" }}
+             exit={{ opacity: 0, y: 20, height: 0 }}
+             className="pointer-events-auto bg-[#1a1a1a]/90 backdrop-blur-xl border border-white/10 rounded-2xl mb-4 overflow-hidden shadow-2xl flex flex-col origin-bottom"
+           >
+              <div className="p-4 border-b border-white/10 flex justify-between items-center bg-white/5">
+                 <div className="flex items-center gap-2">
+                    <MdAutoAwesome className="text-white" />
+                    <span className="font-bold text-sm">Wise AI</span>
+                    <span className="text-[10px] bg-emerald-500/20 text-emerald-500 px-2 py-0.5 rounded-full">Product Guide</span>
+                 </div>
+                 <button onClick={() => setIsOpen(false)} className="text-white/50 hover:text-white">
+                    <MdClose />
+                 </button>
+              </div>
+              <div ref={scrollRef} className="flex-1 p-4 overflow-y-auto space-y-4 custom-scrollbar">
+                 {messages.map((m, i) => (
+                    <motion.div 
+                       key={i} 
+                       initial={{ opacity: 0, y: 10 }} 
+                       animate={{ opacity: 1, y: 0 }}
+                       className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    >
+                       <div className={`max-w-[85%] px-4 py-2 rounded-2xl text-sm ${
+                          m.role === 'user' ? 'bg-white text-black' : 'bg-white/10 text-white border border-white/5'
+                       }`}>
+                          {m.role === 'assistant' ? (
+                              <div className="prose prose-invert prose-sm max-w-none leading-relaxed">
+                                <ReactMarkdown 
+                                  remarkPlugins={[remarkGfm]}
+                                  components={{
+                                     p: ({children}: any) => <p className="mb-2 last:mb-0">{children}</p>,
+                                     ul: ({children}: any) => <ul className="list-disc ml-4 mb-2">{children}</ul>,
+                                     li: ({children}: any) => <li className="mb-1">{children}</li>,
+                                     strong: ({children}: any) => <span className="font-bold text-yellow-500">{children}</span>
+                                  }}
+                                >
+                                  {m.text}
+                                </ReactMarkdown>
+                              </div>
+                          ) : (
+                              m.text
+                          )}
+                       </div>
+                    </motion.div>
+                 ))}
+                 {isTyping && (
+                    <div className="flex justify-start">
+                       <div className="bg-white/10 px-3 py-2 rounded-xl flex gap-1 items-center h-8">
+                          <span className="w-1.5 h-1.5 bg-white/50 rounded-full animate-bounce" />
+                          <span className="w-1.5 h-1.5 bg-white/50 rounded-full animate-bounce delay-100" />
+                          <span className="w-1.5 h-1.5 bg-white/50 rounded-full animate-bounce delay-200" />
+                       </div>
+                    </div>
+                 )}
+              </div>
+           </motion.div>
+         )}
+       </AnimatePresence>
+
+       {/* Input Bar */}
+       <div className="pointer-events-auto">
+          <motion.form 
+            layout
+            onSubmit={handleSubmit}
+            className={`
+               relative flex items-center gap-2 
+               bg-black/80 backdrop-blur-xl border border-white/40 
+               rounded-full p-1 pl-5 shadow-2xl shadow-purple-500/10
+               transition-all duration-300
+               ${isOpen ? 'ring-1 ring-white/20' : 'hover:border-white/60'}
+            `}
+          >
+             <MdAutoAwesome className={`text-white text-xl transition-all ${isOpen ? 'opacity-100' : 'opacity-70'}`} />
+             <input 
+               ref={inputRef}
+               value={input}
+               onChange={(e) => setInput(e.target.value)}
+               placeholder="Ask Wise AI..."
+               className="flex-1 bg-transparent border-none outline-none text-white placeholder:text-white/40 text-sm h-10"
+             />
+             <button 
+               type="submit"
+               className="w-9 h-9 rounded-full bg-white text-black flex items-center justify-center hover:bg-white/90 transition-colors"
+             >
+                <MdArrowForward size={20} />
+             </button>
+          </motion.form>
+       </div>
+    </div>
+  );
+};
 
 
 
@@ -400,6 +575,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-black text-white selection:bg-white selection:text-black font-sans overflow-x-hidden pb-32">
       <FloatingNavbar user={user} signInWithGoogle={signInWithGoogle} logout={logout} />
+      <FixedFinanceGPT isLoggedIn={!!user} />
 
       
       {/* Background with Interactive Bubble Grid */}
