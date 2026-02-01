@@ -1,6 +1,6 @@
 # Wise
 
-**Not budgeting. Just better daily money decisions.**
+**Micro Financial Advisor**
 
 Wise is a real-time, decision-first personal finance dashboard that helps users answer one question **in the moment**:
 
